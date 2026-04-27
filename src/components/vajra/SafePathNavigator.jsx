@@ -243,6 +243,7 @@ export default function SafePathNavigator({ terrainImageSrc, imageFile, segmenta
 
   const [start,       setStart]       = useState({ gx: 4,  gy: 42 });
   const [dest,        setDest]        = useState({ gx: 60, gy: 5  });
+  const [bgLoaded,    setBgLoaded]    = useState(false);
   const [rawPath,     setRawPath]     = useState(null);
   const [smoothPath,  setSmoothPath]  = useState(null);
   const [metrics,     setMetrics]     = useState(null);
@@ -257,14 +258,35 @@ export default function SafePathNavigator({ terrainImageSrc, imageFile, segmenta
   useEffect(() => { startRef.current = start; }, [start]);
   useEffect(() => { destRef.current  = dest;  }, [dest]);
 
+  // Find nearest non-obstacle cell to a position
+  const clampToPassable = useCallback((pos, grid) => {
+    if (!grid) return pos;
+    if (grid[pos.gy]?.[pos.gx]?.risk < TERRAIN_CLASSES.obstacle.weight) return pos;
+    for (let r = 1; r < 10; r++) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          const nx = pos.gx + dx, ny = pos.gy + dy;
+          if (nx >= 0 && ny >= 0 && nx < GRID_W && ny < GRID_H) {
+            if (grid[ny][nx].risk < TERRAIN_CLASSES.obstacle.weight) return { gx: nx, gy: ny };
+          }
+        }
+      }
+    }
+    return pos;
+  }, []);
+
   // ─── STEP 5+6: Run pathfinding + smoothing ─────────────────────────────────
   const runPathfinding = useCallback((s, d, grid) => {
     if (!grid) return;
     setNoPath(false);
     if (animRef.current) cancelAnimationFrame(animRef.current);
 
+    // Clamp start/dest to passable cells
+    const cs = clampToPassable(s, grid);
+    const cd = clampToPassable(d, grid);
+
     const t0 = performance.now();
-    const found = astar(grid, s, d, GRID_W, GRID_H);
+    const found = astar(grid, cs, cd, GRID_W, GRID_H);
     const elapsed = performance.now() - t0;
     setGenTimeMs(Math.round(elapsed));
 
@@ -288,7 +310,7 @@ export default function SafePathNavigator({ terrainImageSrc, imageFile, segmenta
     } else {
       setRawPath(null); setSmoothPath(null); setMetrics(null); setNoPath(true);
     }
-  }, []);
+  }, [clampToPassable]);
 
   // ─── STEP 1+2: Build grid from image ──────────────────────────────────────
   useEffect(() => {
@@ -308,13 +330,14 @@ export default function SafePathNavigator({ terrainImageSrc, imageFile, segmenta
       runPathfinding(s, d, grid);
     }
 
-    // Cache background image
+    // Cache background image and trigger redraw when loaded
+    setBgLoaded(false);
+    bgImgRef.current = null;
     if (terrainImageSrc) {
       const img = new Image();
-      img.onload = () => { bgImgRef.current = img; };
+      img.onload = () => { bgImgRef.current = img; setBgLoaded(true); };
+      img.onerror = () => setBgLoaded(false);
       img.src = terrainImageSrc;
-    } else {
-      bgImgRef.current = null;
     }
 
     return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
@@ -361,15 +384,9 @@ export default function SafePathNavigator({ terrainImageSrc, imageFile, segmenta
       ctx.textAlign = 'left';
     };
 
-    // If background image not yet loaded, draw sync; else wait for it
-    if (terrainImageSrc && !bgImgRef.current) {
-      const img = new Image();
-      img.onload = () => { bgImgRef.current = img; doDraw(); };
-      img.src = terrainImageSrc;
-    } else {
-      doDraw();
-    }
-  }, [rawPath, smoothPath, animProg, start, dest, terrainImageSrc, lang]);
+    // Always draw immediately (bg image handled via bgLoaded state trigger)
+    doDraw();
+  }, [rawPath, smoothPath, animProg, start, dest, bgLoaded, lang]);
 
   // ─── CANVAS CLICK ─────────────────────────────────────────────────────────
   const handleCanvasClick = useCallback((e) => {

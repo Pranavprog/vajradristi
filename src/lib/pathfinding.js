@@ -73,9 +73,10 @@ export function buildGridFromPixels(imageData, gridW, gridH, imgW, imgH) {
     for (let gx = 0; gx < gridW; gx++) {
       const norm = (rawRisk[gy * gridW + gx] - minR) / span;
       let type, weight;
-      if (norm > 0.82)      { type = 'obstacle'; weight = TERRAIN_CLASSES.obstacle.weight; }
-      else if (norm > 0.60) { type = 'high';     weight = TERRAIN_CLASSES.high.weight;     }
-      else if (norm > 0.35) { type = 'moderate'; weight = TERRAIN_CLASSES.moderate.weight; }
+      // Use conservative obstacle threshold so most cells remain passable
+      if (norm > 0.90)      { type = 'obstacle'; weight = TERRAIN_CLASSES.obstacle.weight; }
+      else if (norm > 0.65) { type = 'high';     weight = TERRAIN_CLASSES.high.weight;     }
+      else if (norm > 0.38) { type = 'moderate'; weight = TERRAIN_CLASSES.moderate.weight; }
       else                  { type = 'safe';     weight = TERRAIN_CLASSES.safe.weight;     }
       grid[gy][gx] = { gx, gy, risk: weight, type, norm, f: 0, g: 0, h: 0, parent: null };
     }
