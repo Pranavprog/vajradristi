@@ -341,6 +341,67 @@ export async function generateRiskHeatmapDemo(imageFile, width = 800, height = 6
   return canvasToBase64(canvas);
 }
 
+// ─── DEMO METRICS (derived from image pixels) ────────────────────────────────
+
+export async function getDemoMetrics(imageFile) {
+  const sourceImg = await loadImage(imageFile);
+  const { riskGrid, gridW, gridH, highZones, modZones, safeZones } = analyseImagePixels(sourceImg, 32, 24);
+
+  const total = gridW * gridH;
+  let highCount = 0, modCount = 0, safeCount = 0;
+  for (let i = 0; i < total; i++) {
+    const r = riskGrid[i];
+    if (r > 0.65) highCount++;
+    else if (r > 0.35) modCount++;
+    else safeCount++;
+  }
+
+  const highPct  = Math.round((highCount / total) * 100);
+  const modPct   = Math.round((modCount  / total) * 100);
+  const safePct  = 100 - highPct - modPct;
+
+  // Derive a pseudo IoU from how "clean" the segmentation boundaries are
+  // (more edges → harder image → slightly lower IoU)
+  let edgeCount = 0;
+  for (let y = 1; y < gridH - 1; y++) {
+    for (let x = 1; x < gridW - 1; x++) {
+      const idx = y * gridW + x;
+      const diff = Math.abs(riskGrid[idx] - riskGrid[idx - 1]) + Math.abs(riskGrid[idx] - riskGrid[idx - gridW]);
+      if (diff > 0.25) edgeCount++;
+    }
+  }
+  const edgeRatio = edgeCount / total;
+  const iouScore = parseFloat(Math.max(0.70, Math.min(0.97, 0.92 - edgeRatio * 0.8)).toFixed(2));
+
+  // Inference time varies with image complexity
+  const inferenceTime = `${Math.round(30 + edgeRatio * 60)} ms`;
+
+  // Objects detected from distinct high-risk clusters
+  const objectsDetected = Math.max(3, highZones.length + Math.round(modZones.length * 0.5));
+
+  // Terrain difficulty: higher when more high-risk area
+  const terrainDifficulty = parseFloat(Math.max(2.0, Math.min(9.8, highPct * 0.18 + modPct * 0.07 + 1.5)).toFixed(1));
+
+  // Dynamic explanation lines
+  const explanationLines = [];
+  if (highPct > 20) explanationLines.push(`${highPct}% high-risk terrain detected in field of view`);
+  if (highZones.length > 2) explanationLines.push(`${highZones.length} obstacle clusters identified`);
+  if (modPct > 25) explanationLines.push(`Moderate terrain spans ${modPct}% — proceed with caution`);
+  if (safePct > 40) explanationLines.push(`Safe corridor available — ${safePct}% clear path`);
+  if (edgeRatio > 0.15) explanationLines.push('Complex terrain boundaries detected');
+  if (terrainDifficulty > 6) explanationLines.push('Steep gradient / uneven surface warning');
+  if (explanationLines.length < 3) explanationLines.push('AI model confidence within acceptable range');
+
+  return {
+    iou_score: iouScore,
+    inference_time: inferenceTime,
+    objects_detected: objectsDetected,
+    risk_percentages: { high: highPct, moderate: modPct, safe: safePct },
+    terrain_difficulty: terrainDifficulty,
+    explanationLines,
+  };
+}
+
 // ─── SAFE PATH ───────────────────────────────────────────────────────────────
 
 export function generateSafePathDemo(width = 640, height = 480) {

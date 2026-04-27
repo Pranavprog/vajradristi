@@ -1,8 +1,8 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useLang } from '../lib/LanguageContext';
 
-import { generateSegmentationDemo, generateRiskHeatmapDemo, generateSafePathDemo } from '../lib/demoImages';
+import { generateSegmentationDemo, generateRiskHeatmapDemo, generateSafePathDemo, getDemoMetrics } from '../lib/demoImages';
 import TopNav from '../components/vajra/TopNav';
 import AlertBanner from '../components/vajra/AlertBanner';
 import UploadPanel from '../components/vajra/UploadPanel';
@@ -63,31 +63,23 @@ export default function Dashboard() {
       toast.success(t('analysisComplete'));
     } catch (error) {
       setSystemStatus('online');
-      // Demo fallback — derive outputs from the actual uploaded image pixels
-      const [segImg, riskImg] = await Promise.all([
+      // Demo fallback — derive ALL outputs from the actual uploaded image pixels
+      const [segImg, riskImg, demoMetrics] = await Promise.all([
         generateSegmentationDemo(selectedImage),
         generateRiskHeatmapDemo(selectedImage),
+        getDemoMetrics(selectedImage),
       ]);
       const demoResult = {
         original_image: null,
         segmentation_image: segImg,
         risk_map_image: riskImg,
         safe_path_image: generateSafePathDemo(),
-        iou_score: 0.87,
-        inference_time: '45 ms',
-        objects_detected: 12,
-        risk_percentages: { high: 25, moderate: 40, safe: 35 },
-        terrain_difficulty: 7.8,
-        alerts: 'HIGH RISK DETECTED',
-        explanation: [
-          'Large rock detected in primary path',
-          'Dense obstacle region ahead',
-          'Close proximity to steep terrain edge',
-          'Uneven surface gradient detected',
-        ],
+        ...demoMetrics,
+        alerts: demoMetrics.risk_percentages.high > 30 ? 'HIGH RISK DETECTED' : null,
+        explanation: demoMetrics.explanationLines,
       };
       setResult(demoResult);
-      setAlert(demoResult.alerts);
+      if (demoResult.alerts) setAlert(demoResult.alerts);
       toast.info(t('demoAnalysis'));
     } finally {
       setIsLoading(false);
@@ -102,6 +94,17 @@ export default function Dashboard() {
   }, []);
 
   const hasResult = result !== null;
+
+  // Stable object URL for the selected image — revoked when image changes
+  const selectedImageUrl = useMemo(() => {
+    if (!selectedImage) return null;
+    const url = URL.createObjectURL(selectedImage);
+    return url;
+  }, [selectedImage]);
+
+  useEffect(() => {
+    return () => { if (selectedImageUrl) URL.revokeObjectURL(selectedImageUrl); };
+  }, [selectedImageUrl]);
 
   return (
     <div className="min-h-screen bg-background bg-grid font-inter">
@@ -146,9 +149,7 @@ export default function Dashboard() {
                 imageSrc={
                   result.original_image
                     ? `data:image/png;base64,${result.original_image}`
-                    : selectedImage
-                    ? URL.createObjectURL(selectedImage)
-                    : null
+                    : selectedImageUrl
                 }
                 labelKey="inputLabel"
                 delay={0.1}
@@ -187,9 +188,7 @@ export default function Dashboard() {
                 terrainImageSrc={
                   result.original_image
                     ? `data:image/png;base64,${result.original_image}`
-                    : selectedImage
-                    ? URL.createObjectURL(selectedImage)
-                    : null
+                    : selectedImageUrl
                 }
               />
 
