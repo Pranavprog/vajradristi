@@ -10,7 +10,7 @@ const GRID_H = 45;
 const CANVAS_W = 720;
 const CANVAS_H = 540;
 
-// Default risk blobs for demo mode
+// Default risk blobs for when no image is available
 const DEFAULT_BLOBS = [
   { gx: 12, gy: 24, r: 9,  type: 'high'     },
   { gx: 36, gy: 20, r: 8,  type: 'high'     },
@@ -22,6 +22,52 @@ const DEFAULT_BLOBS = [
   { gx: 8,  gy: 36, r: 7,  type: 'moderate' },
   { gx: 55, gy: 15, r: 6,  type: 'moderate' },
 ];
+
+/** Build a pathfinding grid by sampling the actual image pixels */
+function buildGridFromImage(imageFile) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(imageFile);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const tmp = document.createElement('canvas');
+      tmp.width = GRID_W;
+      tmp.height = GRID_H;
+      const tc = tmp.getContext('2d');
+      tc.drawImage(img, 0, 0, GRID_W, GRID_H);
+      const { data } = tc.getImageData(0, 0, GRID_W, GRID_H);
+
+      const grid = [];
+      for (let gy = 0; gy < GRID_H; gy++) {
+        grid[gy] = [];
+        for (let gx = 0; gx < GRID_W; gx++) {
+          const i = (gy * GRID_W + gx) * 4;
+          const r = data[i] / 255;
+          const g = data[i + 1] / 255;
+          const b = data[i + 2] / 255;
+
+          const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
+          const redness    = Math.max(0, r - Math.max(g, b) * 0.9);
+          const greenness  = Math.max(0, g - Math.max(r, b) * 0.85);
+          const blueness   = Math.max(0, b - Math.max(r, g) * 0.85);
+
+          let risk = (1 - brightness) * 0.5 + redness * 1.2 - greenness * 0.8 - blueness * 0.4;
+          risk = Math.max(0, Math.min(1, risk));
+
+          let type, weight;
+          if (risk > 0.75)      { type = 'obstacle'; weight = TERRAIN_CLASSES.obstacle.weight; }
+          else if (risk > 0.58) { type = 'high';     weight = TERRAIN_CLASSES.high.weight;     }
+          else if (risk > 0.32) { type = 'moderate'; weight = TERRAIN_CLASSES.moderate.weight; }
+          else                  { type = 'safe';     weight = TERRAIN_CLASSES.safe.weight;     }
+
+          grid[gy][gx] = { gx, gy, risk: weight, type, f: 0, g: 0, h: 0, parent: null };
+        }
+      }
+      resolve(grid);
+    };
+    img.src = url;
+  });
+}
 
 function gridToCanvas(gx, gy) {
   return {
@@ -205,7 +251,7 @@ function drawLegend(ctx, labels = ['Safe Zone', 'Moderate Risk', 'High Risk', 'O
   });
 }
 
-export default function SafePathNavigator({ terrainImageSrc }) {
+export default function SafePathNavigator({ terrainImageSrc, imageFile }) {
   const { t, lang } = useLang();
   const canvasRef  = useRef(null);
   const animRef    = useRef(null);
@@ -220,12 +266,20 @@ export default function SafePathNavigator({ terrainImageSrc }) {
   const [animProg, setAnimProg] = useState(1);
   const [isCalc,  setIsCalc]    = useState(false);
   const [noPath,  setNoPath]    = useState(false);
-  const [draggingBlob, setDraggingBlob] = useState(null);
 
-  // Init grid
+  // Rebuild grid from image whenever imageFile changes
   useEffect(() => {
-    gridRef.current = buildDemoGrid(GRID_W, GRID_H, blobsRef.current);
-  }, []);
+    if (imageFile) {
+      buildGridFromImage(imageFile).then(grid => {
+        gridRef.current = grid;
+        runPathfinding(start, dest, grid);
+      });
+    } else {
+      gridRef.current = buildDemoGrid(GRID_W, GRID_H, blobsRef.current);
+      runPathfinding(start, dest, gridRef.current);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [imageFile]);
 
   // Run A*
   const runPathfinding = useCallback((s, d, grid) => {
@@ -256,11 +310,9 @@ export default function SafePathNavigator({ terrainImageSrc }) {
     setIsCalc(false);
   }, []);
 
-  // Run on mount and when start/dest change
+  // Re-run pathfinding when start/dest change (grid already built)
   useEffect(() => {
-    if (!gridRef.current) {
-      gridRef.current = buildDemoGrid(GRID_W, GRID_H, blobsRef.current);
-    }
+    if (!gridRef.current) return;
     runPathfinding(start, dest, gridRef.current);
     return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
   }, [start, dest, runPathfinding]);
@@ -314,20 +366,34 @@ export default function SafePathNavigator({ terrainImageSrc }) {
     setClickMode(null);
   }, [clickMode]);
 
-  // Recalculate with random obstacles
+  // Recalculate — if image-derived grid exists, just re-run A* with shuffled start/dest nudge
   const handleDynamicUpdate = useCallback(() => {
-    const newBlobs = [
-      ...DEFAULT_BLOBS,
-      {
-        gx: Math.floor(Math.random() * (GRID_W - 10)) + 5,
-        gy: Math.floor(Math.random() * (GRID_H - 10)) + 5,
-        r: 5 + Math.random() * 6,
-        type: Math.random() > 0.5 ? 'high' : 'obstacle',
-      },
-    ];
-    blobsRef.current = newBlobs;
-    gridRef.current  = buildDemoGrid(GRID_W, GRID_H, newBlobs);
-    runPathfinding(start, dest, gridRef.current);
+    if (gridRef.current) {
+      // Slightly nudge start/dest randomly to force a different path
+      const newStart = {
+        gx: Math.max(0, Math.min(GRID_W - 1, start.gx + Math.floor(Math.random() * 7) - 3)),
+        gy: Math.max(0, Math.min(GRID_H - 1, start.gy + Math.floor(Math.random() * 7) - 3)),
+      };
+      const newDest = {
+        gx: Math.max(0, Math.min(GRID_W - 1, dest.gx + Math.floor(Math.random() * 7) - 3)),
+        gy: Math.max(0, Math.min(GRID_H - 1, dest.gy + Math.floor(Math.random() * 7) - 3)),
+      };
+      setStart(newStart);
+      setDest(newDest);
+    } else {
+      const newBlobs = [
+        ...DEFAULT_BLOBS,
+        {
+          gx: Math.floor(Math.random() * (GRID_W - 10)) + 5,
+          gy: Math.floor(Math.random() * (GRID_H - 10)) + 5,
+          r: 5 + Math.random() * 6,
+          type: Math.random() > 0.5 ? 'high' : 'obstacle',
+        },
+      ];
+      blobsRef.current = newBlobs;
+      gridRef.current  = buildDemoGrid(GRID_W, GRID_H, newBlobs);
+      runPathfinding(start, dest, gridRef.current);
+    }
   }, [start, dest, runPathfinding]);
 
   const safetyColor =

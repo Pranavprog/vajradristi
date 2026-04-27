@@ -190,6 +190,7 @@ export default function Dashboard() {
                     ? `data:image/png;base64,${result.original_image}`
                     : selectedImageUrl
                 }
+                imageFile={selectedImage}
               />
 
               {/* Safe Path + Metrics Row */}
