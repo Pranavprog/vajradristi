@@ -14,7 +14,6 @@ import PerformanceMetrics from '../components/vajra/PerformanceMetrics';
 import ExplainableAI from '../components/vajra/ExplainableAI';
 import IoUGauge from '../components/vajra/IoUGauge';
 import DownloadButtons from '../components/vajra/DownloadButtons';
-import NDRFPanel from '../components/vajra/NDRFPanel';
 import LoadingOverlay from '../components/vajra/LoadingOverlay';
 import EmptyState from '../components/vajra/EmptyState';
 import SafePathNavigator from '../components/vajra/SafePathNavigator';
@@ -133,7 +132,6 @@ export default function Dashboard() {
                 riskMap={result.risk_map_image}
                 safePath={result.safe_path_image}
               />
-              <NDRFPanel />
             </div>
           )}
         </aside>
@@ -191,17 +189,6 @@ export default function Dashboard() {
                   result.original_image
                     ? `data:image/png;base64,${result.original_image}`
                     : selectedImageUrl
-                }
-                imageFile={selectedImage}
-                segmentationImageSrc={
-                  result.segmentation_image
-                    ? `data:image/png;base64,${result.segmentation_image}`
-                    : null
-                }
-                riskHeatmapSrc={
-                  result.risk_map_image
-                    ? `data:image/png;base64,${result.risk_map_image}`
-                    : null
                 }
               />
 
