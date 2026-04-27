@@ -1,18 +1,17 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Gauge, Timer, ScanSearch } from 'lucide-react';
+import { Timer, ScanSearch } from 'lucide-react';
 import { useLang } from '@/lib/LanguageContext';
 
-export default function PerformanceMetrics({ iouScore, inferenceTime, objectsDetected }) {
+export default function PerformanceMetrics({ inferenceTime, objectsDetected }) {
   const { t } = useLang();
 
+  if (inferenceTime === undefined) return null;
+
   const metrics = [
-    { labelKey: 'iouScore', Icon: Gauge, value: iouScore?.toFixed(2) },
     { labelKey: 'inferenceTime', Icon: Timer, value: inferenceTime },
     { labelKey: 'objectsDetected', Icon: ScanSearch, value: objectsDetected },
   ];
-
-  if (iouScore === undefined) return null;
 
   return (
     <motion.div
@@ -24,7 +23,7 @@ export default function PerformanceMetrics({ iouScore, inferenceTime, objectsDet
       <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         {t('performance')}
       </h3>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2">
         {metrics.map(({ labelKey, Icon, value }, idx) => (
           <motion.div
             key={labelKey}

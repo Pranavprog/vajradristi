@@ -11,6 +11,7 @@ import RiskSummary from '../components/vajra/RiskSummary';
 import TerrainScore from '../components/vajra/TerrainScore';
 import PerformanceMetrics from '../components/vajra/PerformanceMetrics';
 import ExplainableAI from '../components/vajra/ExplainableAI';
+import IoUGauge from '../components/vajra/IoUGauge';
 import DownloadButtons from '../components/vajra/DownloadButtons';
 import LoadingOverlay from '../components/vajra/LoadingOverlay';
 import EmptyState from '../components/vajra/EmptyState';
@@ -168,12 +169,14 @@ export default function Dashboard() {
                 />
               </div>
 
+              {/* IoU Gauge — primary metric */}
+              <IoUGauge iouScore={result.iou_score} />
+
               {/* Safe Path + Metrics Row */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <SafePathPanel safePathImage={result.safe_path_image} />
                 <div className="space-y-4">
                   <PerformanceMetrics
-                    iouScore={result.iou_score}
                     inferenceTime={result.inference_time}
                     objectsDetected={result.objects_detected}
                   />
