@@ -193,6 +193,16 @@ export default function Dashboard() {
                     : selectedImageUrl
                 }
                 imageFile={selectedImage}
+                segmentationImageSrc={
+                  result.segmentation_image
+                    ? `data:image/png;base64,${result.segmentation_image}`
+                    : null
+                }
+                riskHeatmapSrc={
+                  result.risk_map_image
+                    ? `data:image/png;base64,${result.risk_map_image}`
+                    : null
+                }
               />
 
               {/* Safe Path + Metrics Row */}
