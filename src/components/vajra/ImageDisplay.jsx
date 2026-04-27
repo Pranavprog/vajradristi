@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { useLang } from '@/lib/LanguageContext';
 
-export default function ImageDisplay({ titleKey, imageSrc, labelKey, delay = 0 }) {
+export default function ImageDisplay({ titleKey, imageSrc, labelKey, delay = 0, large = false }) {
   const { t } = useLang();
 
   return (
@@ -28,7 +28,7 @@ export default function ImageDisplay({ titleKey, imageSrc, labelKey, delay = 0 }
             <img
               src={imageSrc}
               alt={t(titleKey)}
-              className="w-full aspect-video object-contain bg-black/20"
+              className={`w-full object-contain bg-black/20 ${large ? 'aspect-[4/3]' : 'aspect-video'}`}
             />
             <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-0 group-hover:opacity-100 transition-opacity">
               <div className="w-full h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent animate-scanline" />
@@ -36,7 +36,7 @@ export default function ImageDisplay({ titleKey, imageSrc, labelKey, delay = 0 }
             <div className="absolute inset-0 bg-gradient-to-t from-background/40 via-transparent to-transparent pointer-events-none" />
           </>
         ) : (
-          <div className="aspect-video flex items-center justify-center">
+          <div className={`${large ? 'aspect-[4/3]' : 'aspect-video'} flex items-center justify-center`}>
             <div className="text-center">
               <div className="w-10 h-10 rounded-lg bg-secondary/50 flex items-center justify-center mx-auto mb-2">
                 <div className="w-3 h-3 rounded-sm bg-muted-foreground/20" />

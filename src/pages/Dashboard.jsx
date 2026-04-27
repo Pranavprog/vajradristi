@@ -136,19 +136,21 @@ export default function Dashboard() {
           ) : (
             <div className="space-y-6 max-w-7xl mx-auto">
               {/* Image Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                <ImageDisplay
-                  titleKey="originalImage"
-                  imageSrc={
-                    result.original_image
-                      ? `data:image/png;base64,${result.original_image}`
-                      : selectedImage
-                      ? URL.createObjectURL(selectedImage)
-                      : null
-                  }
-                  labelKey="inputLabel"
-                  delay={0.1}
-                />
+              {/* Original image — compact top row */}
+              <ImageDisplay
+                titleKey="originalImage"
+                imageSrc={
+                  result.original_image
+                    ? `data:image/png;base64,${result.original_image}`
+                    : selectedImage
+                    ? URL.createObjectURL(selectedImage)
+                    : null
+                }
+                labelKey="inputLabel"
+                delay={0.1}
+              />
+              {/* Segmentation + Heatmap — large side-by-side */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <ImageDisplay
                   titleKey="segmentationOutput"
                   imageSrc={
@@ -158,6 +160,7 @@ export default function Dashboard() {
                   }
                   labelKey="aiModelLabel"
                   delay={0.2}
+                  large
                 />
                 <ImageDisplay
                   titleKey="riskHeatmap"
@@ -168,6 +171,7 @@ export default function Dashboard() {
                   }
                   labelKey="analysisLabel"
                   delay={0.3}
+                  large
                 />
               </div>
 
