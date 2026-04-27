@@ -22,15 +22,20 @@
 /** Class IDs matching DeepLabV3+ output */
 const CLASS = { BACKGROUND: 0, GROUND: 1, BUSHES: 2, ROCKS: 3, LOGS: 4, SKY: 5, GRASS: 6 };
 
-/** Step 4 — Class ID → display colour (RGB) */
+/** Step 4 — Class ID → display colour (RGB)
+ *  Rocks/Obstacles → Gray
+ *  Trees/Vegetation (Bushes) → Forest Green
+ *  Navigable Ground → Tan/Brown
+ *  Sky/Background → Sky Blue
+ */
 const CLASS_COLOR = {
-  [CLASS.BACKGROUND]: [100, 100, 100],   // Gray
-  [CLASS.GROUND]:     [34,  197,  94],   // Green
-  [CLASS.BUSHES]:     [134, 239, 172],   // Light Green
-  [CLASS.ROCKS]:      [239,  68,  68],   // Red
-  [CLASS.LOGS]:       [249, 115,  22],   // Orange
-  [CLASS.SKY]:        [96,  165, 250],   // Blue
-  [CLASS.GRASS]:      [74,  222, 128],   // Medium Green
+  [CLASS.BACKGROUND]: [120, 120, 120],   // Gray  (unused — mapped to ROCKS below)
+  [CLASS.GROUND]:     [188, 143,  80],   // Tan / Brown  — Navigable Path
+  [CLASS.BUSHES]:     [ 34, 102,  34],   // Forest Green — Trees/Vegetation
+  [CLASS.ROCKS]:      [130, 130, 130],   // Gray         — Rocks/Obstacles
+  [CLASS.LOGS]:       [188, 143,  80],   // Tan (same as ground for display)
+  [CLASS.SKY]:        [135, 195, 235],   // Sky Blue     — Sky/Background
+  [CLASS.GRASS]:      [ 34, 102,  34],   // Forest Green (same as bushes)
 };
 
 /** Step 5 — Class → risk level: 0=safe, 1=moderate, 2=high, -1=ignore */
@@ -83,20 +88,23 @@ function lerpColor(r1, g1, b1, r2, g2, b2, t) {
 // ─── STEP 1+2: PREPROCESS + CLASSIFY ────────────────────────────────────────
 
 /**
- * Downscale image to MODEL_INPUT × MODEL_INPUT (Step 1 resize),
- * extract pixels, then classify each cell into a CLASS id (Step 2).
+ * Intensity-Based Heuristic Algorithm (HTML5 Canvas getImageData)
  *
- * Classification heuristics (approximating a trained model):
- *   Sky       → high blue dominance, bright
- *   Rocks     → reddish-brownish, low saturation, dark
- *   Logs      → warm brown, medium brightness
- *   Bushes    → mid green, some variation
- *   Grass     → bright green
- *   Ground    → dark earthy tone
- *   Background→ very dark / very uniform
+ * Resize image to MODEL_INPUT × MODEL_INPUT, read pixel data,
+ * then classify each cell by average grayscale intensity:
+ *
+ *   intensity = (R + G + B) / 3
+ *
+ *   < 60   → ROCKS / Obstacles  (CLASS.ROCKS)
+ *   < 110  → Trees / Vegetation (CLASS.BUSHES)
+ *   < 170  → Navigable Ground   (CLASS.GROUND)
+ *   ≥ 170  → Sky / Background   (CLASS.SKY)
+ *
+ * Runs entirely in the browser in milliseconds — no backend required.
+ * (Replace classifyImageCells with a real DeepLabV3 API call to use .pth weights)
  */
 function classifyImageCells(sourceImg, gridW = GRID_W, gridH = GRID_H) {
-  // Step 1 — Resize to model input size first, then downsample to grid
+  // Step 1 — Resize to model input size, then downsample to grid
   const tmpFull = document.createElement('canvas');
   tmpFull.width  = MODEL_INPUT;
   tmpFull.height = MODEL_INPUT;
@@ -109,76 +117,38 @@ function classifyImageCells(sourceImg, gridW = GRID_W, gridH = GRID_H) {
   tc.drawImage(tmpFull, 0, 0, gridW, gridH);
   const { data } = tc.getImageData(0, 0, gridW, gridH);
 
-  // Step 2 — class ID array (one per cell)
+  // Step 2 — Classify by grayscale intensity threshold
   const classGrid = new Uint8Array(gridW * gridH);
   const riskGrid  = new Float32Array(gridW * gridH);
 
   for (let i = 0; i < gridW * gridH; i++) {
-    const r = data[i * 4]     / 255;
-    const g = data[i * 4 + 1] / 255;
-    const b = data[i * 4 + 2] / 255;
+    const r = data[i * 4];
+    const g = data[i * 4 + 1];
+    const b = data[i * 4 + 2];
 
-    const brightness  = 0.299 * r + 0.587 * g + 0.114 * b;
-    const redness     = r - Math.max(g, b);
-    const greenness   = g - Math.max(r, b);
-    const blueness    = b - Math.max(r, g);
-    const saturation  = Math.max(r, g, b) - Math.min(r, g, b);
-    const warmth      = r * 0.6 + g * 0.3 - b * 0.4; // warm vs cool
+    // Average intensity (0–255)
+    const intensity = (r + g + b) / 3;
 
-    let cls = CLASS.BACKGROUND;
-
-    // Sky: high blue dominance + bright
-    if (blueness > 0.08 && brightness > 0.45) {
-      cls = CLASS.SKY;
-    }
-    // Rocks: reddish/brownish, medium-low brightness, some warmth
-    else if (redness > 0.04 && brightness < 0.60 && saturation > 0.05) {
-      cls = CLASS.ROCKS;
-    }
-    // Logs: warm brown — high warmth, mid brightness, low saturation
-    else if (warmth > 0.15 && brightness > 0.25 && brightness < 0.65 && saturation < 0.35) {
-      cls = CLASS.LOGS;
-    }
-    // Grass: bright green
-    else if (greenness > 0.08 && brightness > 0.45) {
-      cls = CLASS.GRASS;
-    }
-    // Bushes: mid green, darker
-    else if (greenness > 0.04 && brightness > 0.20 && brightness <= 0.45) {
-      cls = CLASS.BUSHES;
-    }
-    // Ground: dark, earthy, low saturation
-    else if (brightness < 0.40 && saturation < 0.18) {
-      cls = CLASS.GROUND;
-    }
-    // Default
-    else {
-      cls = CLASS.GROUND;
-    }
+    let cls;
+    if      (intensity < 60)  cls = CLASS.ROCKS;      // Dark  → Rocks/Obstacles
+    else if (intensity < 110) cls = CLASS.BUSHES;     // Mid-dark → Trees/Vegetation
+    else if (intensity < 170) cls = CLASS.GROUND;     // Mid-bright → Navigable Ground
+    else                      cls = CLASS.SKY;        // Bright → Sky/Background
 
     classGrid[i] = cls;
-
-    // Derive risk score for heatmap intensity
-    const baseRisk = CLASS_RISK[cls];
-    if (baseRisk === -1) {
-      riskGrid[i] = 0;
-    } else {
-      // Add local density modifier: dark shadows increase risk
-      const shadowBoost = Math.max(0, (0.35 - brightness) * 0.5);
-      riskGrid[i] = Math.min(1, (baseRisk / 2) + shadowBoost);
-    }
+    // Risk score: normalize intensity to [0..1] and invert (dark = high risk)
+    riskGrid[i] = Math.max(0, Math.min(1, 1 - intensity / 255));
   }
 
-  // Step 3 — Verify output
-  const nonZero = classGrid.some(v => v !== 0);
-  if (!nonZero) {
-    console.warn('[VAJRADRISTI] Segmentation: all cells classified as background — possible blank input');
-  }
+  // Step 3 — Verify output shape
   if (classGrid.length !== gridW * gridH) {
     throw new Error(`[VAJRADRISTI] Output shape mismatch: expected ${gridW * gridH}, got ${classGrid.length}`);
   }
+  if (!classGrid.some(v => v !== CLASS.SKY)) {
+    console.warn('[VAJRADRISTI] Segmentation: image appears uniformly bright — check input');
+  }
 
-  // Step 7 — Compute per-cell density (neighbour count of same high-risk class)
+  // Step 7 — Density grid: fraction of high-risk neighbours per cell
   const densityGrid = new Float32Array(gridW * gridH);
   for (let y = 0; y < gridH; y++) {
     for (let x = 0; x < gridW; x++) {
@@ -194,7 +164,7 @@ function classifyImageCells(sourceImg, gridW = GRID_W, gridH = GRID_H) {
           if (CLASS_RISK[classGrid[ny * gridW + nx]] >= CLASS_RISK[cls]) count++;
         }
       }
-      densityGrid[idx] = count / total;
+      densityGrid[idx] = total > 0 ? count / total : 0;
     }
   }
 
@@ -277,18 +247,16 @@ export async function generateSegmentationDemo(imageFile, width = 800, height = 
     ctx.fillStyle = 'rgba(0,0,0,0.03)'; ctx.fillRect(0, y, width, 1);
   }
 
-  // Legend (all 6 terrain classes)
+  // Legend (4 intensity-threshold classes)
   const legendItems = [
-    { cls: CLASS.GROUND,  label: 'Ground    — SAFE'     },
-    { cls: CLASS.GRASS,   label: 'Grass     — MODERATE' },
-    { cls: CLASS.BUSHES,  label: 'Bushes    — MODERATE' },
-    { cls: CLASS.ROCKS,   label: 'Rocks     — HIGH RISK'},
-    { cls: CLASS.LOGS,    label: 'Logs      — HIGH RISK'},
-    { cls: CLASS.SKY,     label: 'Sky       — IGNORE'   },
+    { cls: CLASS.ROCKS,  label: 'Rocks/Obstacles  (intensity < 60)'  },
+    { cls: CLASS.BUSHES, label: 'Trees/Vegetation (intensity < 110)' },
+    { cls: CLASS.GROUND, label: 'Navigable Ground (intensity < 170)' },
+    { cls: CLASS.SKY,    label: 'Sky/Background   (intensity ≥ 170)' },
   ];
   const lgH = legendItems.length * 18 + 14;
   ctx.fillStyle = 'rgba(5,12,28,0.90)';
-  ctx.beginPath(); ctx.roundRect(8, height - FOOTER_H - lgH - 8, 192, lgH, 6); ctx.fill();
+  ctx.beginPath(); ctx.roundRect(8, height - FOOTER_H - lgH - 8, 218, lgH, 6); ctx.fill();
   ctx.strokeStyle = 'rgba(56,189,248,0.25)'; ctx.lineWidth = 1; ctx.stroke();
   legendItems.forEach((li, i) => {
     const ly = height - FOOTER_H - lgH - 8 + 10 + i * 18;
@@ -309,7 +277,7 @@ export async function generateSegmentationDemo(imageFile, width = 800, height = 
   // Footer
   ctx.fillStyle = 'rgba(5,12,28,0.90)'; ctx.fillRect(0, height - FOOTER_H, width, FOOTER_H);
   ctx.fillStyle = '#64748b'; ctx.font = '7.5px monospace';
-  ctx.fillText(`  CLASSES: 6  (Ground|Grass|Bushes|Rocks|Logs|Sky)   |   mIoU: ~87%   |   BACKBONE: DeepLabV3+   |   INPUT: ${MODEL_INPUT}×${MODEL_INPUT}px`, 0, height - 6);
+  ctx.fillText(`  ALGO: Intensity Threshold  |  CLASSES: 4  (Rocks|Vegetation|Ground|Sky)  |  thresholds: 60/110/170  |  INPUT: ${MODEL_INPUT}×${MODEL_INPUT}px`, 0, height - 6);
 
   return canvasToBase64(canvas);
 }
