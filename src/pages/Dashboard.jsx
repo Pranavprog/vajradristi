@@ -17,6 +17,7 @@ import DownloadButtons from '../components/vajra/DownloadButtons';
 import LoadingOverlay from '../components/vajra/LoadingOverlay';
 import EmptyState from '../components/vajra/EmptyState';
 import SafePathNavigator from '../components/vajra/SafePathNavigator';
+import NearestBase from '../components/vajra/NearestBase';
 
 const API_BASE_URL = ''; // Set your API base URL here
 
@@ -134,6 +135,11 @@ export default function Dashboard() {
               />
             </div>
           )}
+
+          {/* Always-visible NDRF base info */}
+          <div className="mt-6">
+            <NearestBase />
+          </div>
         </aside>
 
         {/* MAIN CONTENT */}
