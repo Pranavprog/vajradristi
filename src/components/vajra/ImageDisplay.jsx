@@ -28,7 +28,7 @@ export default function ImageDisplay({ titleKey, imageSrc, labelKey, delay = 0 }
             <img
               src={imageSrc}
               alt={t(titleKey)}
-              className="w-full aspect-video object-cover"
+              className="w-full aspect-video object-contain bg-black/20"
             />
             <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-0 group-hover:opacity-100 transition-opacity">
               <div className="w-full h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent animate-scanline" />

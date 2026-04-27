@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { useLang } from '../lib/LanguageContext';
 
+import { generateSegmentationDemo, generateRiskHeatmapDemo, generateSafePathDemo } from '../lib/demoImages';
 import TopNav from '../components/vajra/TopNav';
 import AlertBanner from '../components/vajra/AlertBanner';
 import UploadPanel from '../components/vajra/UploadPanel';
@@ -61,12 +62,12 @@ export default function Dashboard() {
       toast.success(t('analysisComplete'));
     } catch (error) {
       setSystemStatus('online');
-      // Demo fallback - show sample data for presentation
+      // Demo fallback - generate realistic outputs using canvas
       const demoResult = {
         original_image: null,
-        segmentation_image: null,
-        risk_map_image: null,
-        safe_path_image: null,
+        segmentation_image: generateSegmentationDemo(),
+        risk_map_image: generateRiskHeatmapDemo(),
+        safe_path_image: generateSafePathDemo(),
         iou_score: 0.87,
         inference_time: '45 ms',
         objects_detected: 12,
