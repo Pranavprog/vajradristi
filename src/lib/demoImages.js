@@ -92,29 +92,27 @@ export async function generateSegmentationDemo(imageFile, width = 800, height = 
   canvas.height = height;
   const ctx = canvas.getContext('2d');
 
-  // Draw background image (if provided)
-  if (imageFile) {
-    const sourceImg = await loadImage(imageFile);
-    ctx.drawImage(sourceImg, 0, 0, width, height);
-  } else {
-    const bg = ctx.createLinearGradient(0, 0, 0, height);
-    bg.addColorStop(0, '#0b1a2e'); bg.addColorStop(1, '#163d1e');
-    ctx.fillStyle = bg; ctx.fillRect(0, 0, width, height);
-  }
+  // Load image once, draw background + build grid from same source
+  let classGrid = new Uint8Array(gridW * gridH);
 
-  // Build a per-cell class grid from pixel analysis (high-res grid)
-  let classGrid; // 0=safe, 1=moderate, 2=high
   if (imageFile) {
     const sourceImg = await loadImage(imageFile);
+    // Draw the actual image dimmed as the base layer
+    ctx.drawImage(sourceImg, 0, 0, width, height);
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.fillRect(0, HEADER_H, width, height - HEADER_H - FOOTER_H);
+
+    // Build class grid from same image
     const analysis = analyseImagePixels(sourceImg, gridW, gridH);
-    classGrid = new Uint8Array(gridW * gridH);
     for (let i = 0; i < gridW * gridH; i++) {
       const r = analysis.riskGrid[i];
       classGrid[i] = r > 0.60 ? 2 : r > 0.32 ? 1 : 0;
     }
   } else {
-    // Fallback: simple gradient pattern
-    classGrid = new Uint8Array(gridW * gridH);
+    const bg = ctx.createLinearGradient(0, 0, 0, height);
+    bg.addColorStop(0, '#0b1a2e'); bg.addColorStop(1, '#163d1e');
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, width, height);
+    // Fallback pattern
     for (let gy = 0; gy < gridH; gy++) {
       for (let gx = 0; gx < gridW; gx++) {
         const t = gx / gridW + gy / gridH;
@@ -123,48 +121,37 @@ export async function generateSegmentationDemo(imageFile, width = 800, height = 
     }
   }
 
-  // Paint segmentation mask over the image using per-cell flat colours
+  // Solid-colour segmentation mask per cell (strong, readable colours)
   const contentH = height - HEADER_H - FOOTER_H;
   const cellW = width / gridW;
   const cellH = contentH / gridH;
 
-  const CLASS_COLORS = [
-    'rgba(34,197,94,0.52)',   // safe — green
-    'rgba(245,158,11,0.58)',  // moderate — amber
-    'rgba(239,68,68,0.68)',   // high — red
-  ];
+  // Use solid opaque colours — we composite them over the dimmed image using globalAlpha
+  ctx.save();
+  ctx.globalAlpha = 0.72;
+  const CLASS_COLORS = ['#16a34a', '#d97706', '#dc2626']; // solid green / amber / red
 
   for (let gy = 0; gy < gridH; gy++) {
     for (let gx = 0; gx < gridW; gx++) {
-      const cls = classGrid[gy * gridW + gx];
-      ctx.fillStyle = CLASS_COLORS[cls];
-      ctx.fillRect(
-        gx * cellW,
-        HEADER_H + gy * cellH,
-        cellW + 0.5,
-        cellH + 0.5,
-      );
+      ctx.fillStyle = CLASS_COLORS[classGrid[gy * gridW + gx]];
+      ctx.fillRect(gx * cellW, HEADER_H + gy * cellH, cellW + 0.5, cellH + 0.5);
     }
   }
+  ctx.restore();
 
-  // Draw class boundaries: wherever adjacent cells differ, draw a thin edge line
-  ctx.lineWidth = 0.8;
+  // Boundary lines where class changes
+  ctx.lineWidth = 1.2;
   ctx.setLineDash([]);
   for (let gy = 0; gy < gridH; gy++) {
     for (let gx = 0; gx < gridW; gx++) {
       const cls = classGrid[gy * gridW + gx];
-      const px = gx * cellW;
-      const py = HEADER_H + gy * cellH;
-      // Right neighbour
+      const px = gx * cellW, py = HEADER_H + gy * cellH;
       if (gx < gridW - 1 && classGrid[gy * gridW + gx + 1] !== cls) {
-        ctx.strokeStyle = cls === 2 || classGrid[gy * gridW + gx + 1] === 2
-          ? 'rgba(252,165,165,0.7)' : 'rgba(253,230,138,0.5)';
+        ctx.strokeStyle = 'rgba(255,255,255,0.55)';
         ctx.beginPath(); ctx.moveTo(px + cellW, py); ctx.lineTo(px + cellW, py + cellH); ctx.stroke();
       }
-      // Bottom neighbour
       if (gy < gridH - 1 && classGrid[(gy + 1) * gridW + gx] !== cls) {
-        ctx.strokeStyle = cls === 2 || classGrid[(gy + 1) * gridW + gx] === 2
-          ? 'rgba(252,165,165,0.7)' : 'rgba(253,230,138,0.5)';
+        ctx.strokeStyle = 'rgba(255,255,255,0.55)';
         ctx.beginPath(); ctx.moveTo(px, py + cellH); ctx.lineTo(px + cellW, py + cellH); ctx.stroke();
       }
     }
@@ -172,20 +159,20 @@ export async function generateSegmentationDemo(imageFile, width = 800, height = 
 
   // Subtle scanlines
   for (let y = HEADER_H; y < height - FOOTER_H; y += 4) {
-    ctx.fillStyle = 'rgba(0,0,0,0.025)'; ctx.fillRect(0, y, width, 1);
+    ctx.fillStyle = 'rgba(0,0,0,0.03)'; ctx.fillRect(0, y, width, 1);
   }
 
   // Legend
-  const classes = [
-    { color: 'rgba(34,197,94,0.75)',  border: '#4ade80', label: 'Safe Terrain   — Class 0' },
-    { color: 'rgba(245,158,11,0.75)', border: '#fde68a', label: 'Moderate Risk  — Class 1' },
-    { color: 'rgba(239,68,68,0.80)',  border: '#fca5a5', label: 'Rocky/Obstacle — Class 2' },
+  const legendItems = [
+    { color: '#16a34a', border: '#4ade80', label: 'Safe Terrain   — Class 0' },
+    { color: '#d97706', border: '#fde68a', label: 'Moderate Risk  — Class 1' },
+    { color: '#dc2626', border: '#fca5a5', label: 'Rocky/Obstacle — Class 2' },
   ];
-  const lgH = classes.length * 20 + 14;
-  ctx.fillStyle = 'rgba(5,12,28,0.88)';
+  const lgH = legendItems.length * 20 + 14;
+  ctx.fillStyle = 'rgba(5,12,28,0.90)';
   ctx.beginPath(); ctx.roundRect(8, height - FOOTER_H - lgH - 8, 195, lgH, 6); ctx.fill();
   ctx.strokeStyle = 'rgba(56,189,248,0.25)'; ctx.lineWidth = 1; ctx.stroke();
-  classes.forEach((cl, i) => {
+  legendItems.forEach((cl, i) => {
     const ly = height - FOOTER_H - lgH - 8 + 10 + i * 20;
     ctx.fillStyle = cl.color; ctx.fillRect(14, ly, 12, 12);
     ctx.strokeStyle = cl.border; ctx.lineWidth = 0.8; ctx.strokeRect(14, ly, 12, 12);
@@ -201,7 +188,7 @@ export async function generateSegmentationDemo(imageFile, width = 800, height = 
   ctx.fillStyle = 'rgba(56,189,248,0.4)'; ctx.fillRect(0, HEADER_H - 1, width, 1);
 
   // Footer bar
-  ctx.fillStyle = 'rgba(5,12,28,0.88)'; ctx.fillRect(0, height - FOOTER_H, width, FOOTER_H);
+  ctx.fillStyle = 'rgba(5,12,28,0.90)'; ctx.fillRect(0, height - FOOTER_H, width, FOOTER_H);
   ctx.fillStyle = '#64748b'; ctx.font = '8px monospace';
   ctx.fillText(`  CLASSES: 3   |   mIoU: 87.4%   |   INFERENCE: 42ms   |   BACKBONE: DeepLabV3+   |   INPUT: ${width}×${height}px`, 0, height - 6);
 
@@ -210,121 +197,98 @@ export async function generateSegmentationDemo(imageFile, width = 800, height = 
 
 // ─── RISK HEATMAP ────────────────────────────────────────────────────────────
 
+// Interpolate between two RGB colours by t [0..1]
+function lerpColor(r1,g1,b1, r2,g2,b2, t) {
+  return [Math.round(r1+(r2-r1)*t), Math.round(g1+(g2-g1)*t), Math.round(b1+(b2-b1)*t)];
+}
+
+// Map a risk value [0..1] to an RGB colour through: green → yellow → orange → red → white
+function riskToRgb(v) {
+  if (v < 0.25) return lerpColor(16,185,129, 101,163,13, v/0.25);       // green → lime
+  if (v < 0.50) return lerpColor(101,163,13, 234,179,8, (v-0.25)/0.25); // lime → yellow
+  if (v < 0.75) return lerpColor(234,179,8, 239,68,68, (v-0.50)/0.25);  // yellow → red
+  return lerpColor(239,68,68, 255,255,255, (v-0.75)/0.25);              // red → white-hot
+}
+
 export async function generateRiskHeatmapDemo(imageFile, width = 800, height = 600) {
+  const HEADER_H = 32;
+  const FOOTER_H = 22;
+  const gridW = 80, gridH = 60;
+
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext('2d');
 
-  let analysis = null;
-
-  if (imageFile) {
-    const sourceImg = await loadImage(imageFile);
-    analysis = analyseImagePixels(sourceImg, 40, 30);
-  }
-
   // Dark base
   ctx.fillStyle = '#060d1a'; ctx.fillRect(0, 0, width, height);
 
-  const { gridW, gridH, riskGrid, highZones = [], modZones = [], safeZones = [] } = analysis || {
-    gridW: 0, gridH: 0, riskGrid: null,
-    highZones: [
-      { x: 0.17, y: 0.60, r: 0.17 }, { x: 0.65, y: 0.54, r: 0.14 },
-      { x: 0.87, y: 0.65, r: 0.11 },
-    ],
-    modZones: [
-      { x: 0.30, y: 0.64, r: 0.16 }, { x: 0.62, y: 0.68, r: 0.14 },
-      { x: 0.08, y: 0.74, r: 0.10 },
-    ],
-    safeZones: [
-      { x: 0.50, y: 0.92, r: 0.20 }, { x: 0.22, y: 0.88, r: 0.14 },
-    ],
-  };
+  const contentH = height - HEADER_H - FOOTER_H;
+  const cellW = width / gridW;
+  const cellH = contentH / gridH;
 
-  // If we have real pixel data, render a per-cell heatmap
-  if (riskGrid && gridW > 0) {
-    const cellW = width / gridW;
-    const cellH = (height - 56) / gridH; // leave header + footer room
+  if (imageFile) {
+    const sourceImg = await loadImage(imageFile);
+    const { riskGrid } = analyseImagePixels(sourceImg, gridW, gridH);
+
+    // Draw per-cell heatmap with correct solid colours (no broken alpha math)
     for (let gy = 0; gy < gridH; gy++) {
       for (let gx = 0; gx < gridW; gx++) {
         const risk = riskGrid[gy * gridW + gx];
-        const px = gx * cellW;
-        const py = 32 + gy * cellH;
-
-        // Map risk [0..1] → colour
-        let col;
-        if (risk < 0.3)       col = `rgba(16,185,129,${0.45 + risk})`;
-        else if (risk < 0.55) col = `rgba(245,158,11,${0.5 + risk * 0.5})`;
-        else if (risk < 0.75) col = `rgba(239,68,68,${0.55 + risk * 0.4})`;
-        else                  col = `rgba(220,20,20,${0.65 + risk * 0.35})`;
-
-        ctx.fillStyle = col;
-        ctx.fillRect(px, py, cellW + 1, cellH + 1);
+        const [r, g, b] = riskToRgb(risk);
+        ctx.fillStyle = `rgb(${r},${g},${b})`;
+        ctx.fillRect(gx * cellW, HEADER_H + gy * cellH, cellW + 0.5, cellH + 0.5);
+      }
+    }
+  } else {
+    // Fallback: gradient left→right for demo
+    for (let gy = 0; gy < gridH; gy++) {
+      for (let gx = 0; gx < gridW; gx++) {
+        const risk = gx / gridW;
+        const [r, g, b] = riskToRgb(risk);
+        ctx.fillStyle = `rgb(${r},${g},${b})`;
+        ctx.fillRect(gx * cellW, HEADER_H + gy * cellH, cellW + 0.5, cellH + 0.5);
       }
     }
   }
 
-  // Overlay smooth Gaussian blobs (either from analysis or fallback)
-  safeZones.slice(0, 8).forEach(z => {
-    const r = z.r * Math.min(width, height);
-    const g = ctx.createRadialGradient(z.x * width, z.y * height, 0, z.x * width, z.y * height, r);
-    g.addColorStop(0, 'rgba(16,185,129,0.55)'); g.addColorStop(0.5, 'rgba(5,150,105,0.25)'); g.addColorStop(1, 'rgba(6,95,70,0)');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(z.x * width, z.y * height, r, 0, Math.PI * 2); ctx.fill();
-  });
-
-  modZones.slice(0, 10).forEach(z => {
-    const r = z.r * Math.min(width, height);
-    const g = ctx.createRadialGradient(z.x * width, z.y * height, 0, z.x * width, z.y * height, r);
-    g.addColorStop(0, 'rgba(245,158,11,0.70)'); g.addColorStop(0.4, 'rgba(217,119,6,0.40)'); g.addColorStop(1, 'rgba(120,53,15,0)');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(z.x * width, z.y * height, r, 0, Math.PI * 2); ctx.fill();
-  });
-
-  highZones.slice(0, 8).forEach(z => {
-    const r = z.r * Math.min(width, height);
-    const g = ctx.createRadialGradient(z.x * width, z.y * height, 0, z.x * width, z.y * height, r);
-    g.addColorStop(0, 'rgba(255,255,255,0.50)');
-    g.addColorStop(0.1, 'rgba(254,202,202,0.65)');
-    g.addColorStop(0.3, 'rgba(239,68,68,0.85)');
-    g.addColorStop(0.6, 'rgba(185,28,28,0.55)');
-    g.addColorStop(1, 'rgba(69,10,10,0)');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(z.x * width, z.y * height, r, 0, Math.PI * 2); ctx.fill();
-
-    // Contour rings
-    [0.7, 1.0, 1.3].forEach((mult, i) => {
-      ctx.beginPath(); ctx.arc(z.x * width, z.y * height, r * mult, 0, Math.PI * 2);
-      ctx.strokeStyle = `rgba(239,68,68,${0.15 - i * 0.04})`; ctx.lineWidth = 0.8;
-      ctx.setLineDash([6, 5]); ctx.stroke(); ctx.setLineDash([]);
-    });
-  });
-
-  // Tactical grid
+  // Tactical grid overlay
   const gridSize = 50;
   for (let x = 0; x <= width; x += gridSize) {
-    ctx.strokeStyle = x % (gridSize * 4) === 0 ? 'rgba(56,189,248,0.10)' : 'rgba(56,189,248,0.04)';
-    ctx.lineWidth = 0.5; ctx.beginPath(); ctx.moveTo(x, 32); ctx.lineTo(x, height - 24); ctx.stroke();
+    ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+    ctx.lineWidth = 0.5; ctx.beginPath(); ctx.moveTo(x, HEADER_H); ctx.lineTo(x, height - FOOTER_H); ctx.stroke();
   }
-  for (let y = 32; y <= height - 24; y += gridSize) {
-    ctx.strokeStyle = y % (gridSize * 4) === 0 ? 'rgba(56,189,248,0.10)' : 'rgba(56,189,248,0.04)';
+  for (let y = HEADER_H; y <= height - FOOTER_H; y += gridSize) {
+    ctx.strokeStyle = 'rgba(0,0,0,0.18)';
     ctx.lineWidth = 0.5; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke();
   }
 
   // Scanlines
-  for (let y = 32; y < height; y += 3) {
-    ctx.fillStyle = 'rgba(0,0,0,0.03)'; ctx.fillRect(0, y, width, 1);
+  for (let y = HEADER_H; y < height - FOOTER_H; y += 3) {
+    ctx.fillStyle = 'rgba(0,0,0,0.04)'; ctx.fillRect(0, y, width, 1);
   }
 
-  // Color scale bar
-  const barX = width - 44, barY = 42, barH = height - 80, barW = 16;
+  // Color scale bar (right side)
+  const barX = width - 44, barY = HEADER_H + 10, barH = contentH - 20, barW = 16;
   const barGrad = ctx.createLinearGradient(0, barY, 0, barY + barH);
-  barGrad.addColorStop(0, '#10b981'); barGrad.addColorStop(0.35, '#f59e0b');
-  barGrad.addColorStop(0.65, '#ef4444'); barGrad.addColorStop(1, '#000000');
-  ctx.fillStyle = barGrad; ctx.beginPath(); ctx.roundRect(barX, barY, barW, barH, 4); ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1;
+  barGrad.addColorStop(0,    '#10b981');
+  barGrad.addColorStop(0.25, '#84cc16');
+  barGrad.addColorStop(0.50, '#eab308');
+  barGrad.addColorStop(0.75, '#ef4444');
+  barGrad.addColorStop(1.0,  '#ffffff');
+  ctx.fillStyle = barGrad;
+  ctx.beginPath(); ctx.roundRect(barX, barY, barW, barH, 4); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.roundRect(barX, barY, barW, barH, 4); ctx.stroke();
 
-  [{ f: 0.0, l: 'SAFE', c: '#6ee7b7' }, { f: 0.35, l: 'MODERATE', c: '#fde68a' }, { f: 0.65, l: 'HIGH', c: '#fca5a5' }, { f: 0.9, l: 'CRITICAL', c: '#f87171' }].forEach(t => {
+  [
+    { f: 0.0,  l: 'SAFE',     c: '#6ee7b7' },
+    { f: 0.33, l: 'MODERATE', c: '#fde68a' },
+    { f: 0.66, l: 'HIGH',     c: '#fca5a5' },
+    { f: 0.92, l: 'CRITICAL', c: '#ffffff' },
+  ].forEach(t => {
     const ty = barY + t.f * barH;
-    ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 0.8;
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 0.8;
     ctx.beginPath(); ctx.moveTo(barX - 4, ty); ctx.lineTo(barX, ty); ctx.stroke();
     ctx.fillStyle = t.c; ctx.font = '7.5px monospace'; ctx.textAlign = 'right';
     ctx.fillText(t.l, barX - 6, ty + 3);
@@ -334,15 +298,15 @@ export async function generateRiskHeatmapDemo(imageFile, width = 800, height = 6
   // Header
   const hg2 = ctx.createLinearGradient(0, 0, width, 0);
   hg2.addColorStop(0, 'rgba(127,29,29,0.97)'); hg2.addColorStop(0.5, 'rgba(5,12,28,0.97)'); hg2.addColorStop(1, 'rgba(127,29,29,0.97)');
-  ctx.fillStyle = hg2; ctx.fillRect(0, 0, width, 32);
+  ctx.fillStyle = hg2; ctx.fillRect(0, 0, width, HEADER_H);
   ctx.fillStyle = '#f87171'; ctx.font = 'bold 12px monospace';
   ctx.fillText('▶  RISK HEAT MAP  —  TERRAIN DANGER ANALYSIS  —  VAJRADRISTI v2.1', 12, 21);
-  ctx.fillStyle = 'rgba(239,68,68,0.45)'; ctx.fillRect(0, 31, width, 1);
+  ctx.fillStyle = 'rgba(239,68,68,0.45)'; ctx.fillRect(0, HEADER_H - 1, width, 1);
 
   // Footer
-  ctx.fillStyle = 'rgba(5,12,28,0.85)'; ctx.fillRect(0, height - 22, width, 22);
+  ctx.fillStyle = 'rgba(5,12,28,0.92)'; ctx.fillRect(0, height - FOOTER_H, width, FOOTER_H);
   ctx.fillStyle = '#475569'; ctx.font = '8px monospace';
-  ctx.fillText(`  RESOLUTION: ${width}×${height}   |   ALGORITHM: Gaussian KDE + Pixel Analysis   |   THRESHOLD: 0.65`, 0, height - 8);
+  ctx.fillText(`  RESOLUTION: ${width}×${height}   |   ALGORITHM: Per-Pixel Risk Analysis   |   THRESHOLD: 0.65`, 0, height - 8);
 
   return canvasToBase64(canvas);
 }
