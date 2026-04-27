@@ -63,11 +63,15 @@ export default function Dashboard() {
       toast.success(t('analysisComplete'));
     } catch (error) {
       setSystemStatus('online');
-      // Demo fallback - generate realistic outputs using canvas
+      // Demo fallback — derive outputs from the actual uploaded image pixels
+      const [segImg, riskImg] = await Promise.all([
+        generateSegmentationDemo(selectedImage),
+        generateRiskHeatmapDemo(selectedImage),
+      ]);
       const demoResult = {
         original_image: null,
-        segmentation_image: generateSegmentationDemo(),
-        risk_map_image: generateRiskHeatmapDemo(),
+        segmentation_image: segImg,
+        risk_map_image: riskImg,
         safe_path_image: generateSafePathDemo(),
         iou_score: 0.87,
         inference_time: '45 ms',
