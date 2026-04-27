@@ -185,13 +185,13 @@ function drawMarker(ctx, gx, gy, type) {
   ctx.restore();
 }
 
-function drawLegend(ctx) {
+function drawLegend(ctx, labels = ['Safe Zone', 'Moderate Risk', 'High Risk', 'Obstacle', 'Safe Path']) {
   const items = [
-    { color: 'rgba(34,197,94,0.7)',  label: 'Safe Zone'     },
-    { color: 'rgba(234,179,8,0.7)',  label: 'Moderate Risk' },
-    { color: 'rgba(220,38,38,0.7)',  label: 'High Risk'     },
-    { color: 'rgba(15,15,15,0.9)',   label: 'Obstacle'      },
-    { color: '#22c55e',              label: 'Safe Path'      },
+    { color: 'rgba(34,197,94,0.7)',  label: labels[0] },
+    { color: 'rgba(234,179,8,0.7)',  label: labels[1] },
+    { color: 'rgba(220,38,38,0.7)',  label: labels[2] },
+    { color: 'rgba(15,15,15,0.9)',   label: labels[3] },
+    { color: '#22c55e',              label: labels[4] },
   ];
   const x0 = 10, y0 = CANVAS_H - 14 - items.length * 18;
   ctx.fillStyle = 'rgba(10,20,40,0.75)';
@@ -206,7 +206,7 @@ function drawLegend(ctx) {
 }
 
 export default function SafePathNavigator({ terrainImageSrc }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const canvasRef  = useRef(null);
   const animRef    = useRef(null);
   const gridRef    = useRef(null);
@@ -288,7 +288,7 @@ export default function SafePathNavigator({ terrainImageSrc }) {
         drawPath(ctx, path, animProg);
         drawMarker(ctx, start.gx, start.gy, 'start');
         drawMarker(ctx, dest.gx, dest.gy, 'dest');
-        drawLegend(ctx);
+        drawLegend(ctx, [t('legendSafeZone'), t('legendModerateRisk'), t('legendHighRisk'), t('legendObstacle'), t('legendSafePath')]);
       };
       img.src = terrainImageSrc;
     } else {
@@ -297,9 +297,9 @@ export default function SafePathNavigator({ terrainImageSrc }) {
       drawPath(ctx, path, animProg);
       drawMarker(ctx, start.gx, start.gy, 'start');
       drawMarker(ctx, dest.gx, dest.gy, 'dest');
-      drawLegend(ctx);
+      drawLegend(ctx, [t('legendSafeZone'), t('legendModerateRisk'), t('legendHighRisk'), t('legendObstacle'), t('legendSafePath')]);
     }
-  }, [path, animProg, start, dest, terrainImageSrc]);
+  }, [path, animProg, start, dest, terrainImageSrc, lang]);
 
   // Canvas click handler
   const handleCanvasClick = useCallback((e) => {
@@ -350,8 +350,8 @@ export default function SafePathNavigator({ terrainImageSrc }) {
             <Navigation className="w-4 h-4 text-primary" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-foreground tracking-wide">SAFE PATH NAVIGATOR</h2>
-            <p className="text-[10px] text-muted-foreground font-mono">A* Risk-Weighted Pathfinding · Real-Time</p>
+            <h2 className="text-sm font-bold text-foreground tracking-wide">{t('safePathNavigator')}</h2>
+            <p className="text-[10px] text-muted-foreground font-mono">{t('astarSubtitle')}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -362,7 +362,7 @@ export default function SafePathNavigator({ terrainImageSrc }) {
             className="h-7 text-xs gap-1.5 border-blue-500/40 text-blue-400 hover:bg-blue-500/10"
           >
             <MapPin className="w-3 h-3" />
-            {clickMode === 'start' ? 'Click map…' : 'Set Start'}
+            {clickMode === 'start' ? t('clickMap') : t('setStart')}
           </Button>
           <Button
             size="sm"
@@ -371,7 +371,7 @@ export default function SafePathNavigator({ terrainImageSrc }) {
             className="h-7 text-xs gap-1.5 border-red-500/40 text-red-400 hover:bg-red-500/10"
           >
             <Flag className="w-3 h-3" />
-            {clickMode === 'dest' ? 'Click map…' : 'Set Dest'}
+            {clickMode === 'dest' ? t('clickMap') : t('setDest')}
           </Button>
           <Button
             size="sm"
@@ -380,7 +380,7 @@ export default function SafePathNavigator({ terrainImageSrc }) {
             className="h-7 text-xs gap-1.5 border-amber-500/40 text-amber-400 hover:bg-amber-500/10"
           >
             <RefreshCw className="w-3 h-3" />
-            Dynamic Update
+            {t('dynamicUpdate')}
           </Button>
         </div>
       </div>
@@ -397,7 +397,7 @@ export default function SafePathNavigator({ terrainImageSrc }) {
             <div className="px-4 py-2 bg-primary/10 border-b border-primary/20 flex items-center gap-2">
               <Zap className="w-3.5 h-3.5 text-primary" />
               <span className="text-xs text-primary font-mono">
-                Click anywhere on the map to set the {clickMode === 'start' ? 'START' : 'DESTINATION'} point
+                {t('clickMapHint')} {clickMode === 'start' ? t('startPoint') : t('destinationPoint')}
               </span>
             </div>
           </motion.div>
@@ -442,12 +442,12 @@ export default function SafePathNavigator({ terrainImageSrc }) {
             >
               <div className="bg-card border border-red-500/40 rounded-lg p-6 text-center max-w-xs">
                 <AlertTriangle className="w-8 h-8 text-red-400 mx-auto mb-3" />
-                <h3 className="text-sm font-bold text-foreground mb-1">No Valid Path Found</h3>
+                <h3 className="text-sm font-bold text-foreground mb-1">{t('noPathFound')}</h3>
                 <p className="text-xs text-muted-foreground mb-4">
-                  All routes to destination are blocked by obstacles. Try moving start/destination or click Dynamic Update.
+                  {t('noPathDesc')}
                 </p>
                 <Button size="sm" onClick={handleDynamicUpdate} className="text-xs">
-                  <RefreshCw className="w-3 h-3 mr-1.5" /> Recalculate
+                  <RefreshCw className="w-3 h-3 mr-1.5" /> {t('recalculate')}
                 </Button>
               </div>
             </motion.div>
@@ -459,21 +459,21 @@ export default function SafePathNavigator({ terrainImageSrc }) {
       <div className="grid grid-cols-3 divide-x divide-border/40 border-t border-border/40 bg-card/80">
         <MetricCell
           icon={<Route className="w-4 h-4 text-primary" />}
-          label="Path Distance"
+          label={t('pathDistance')}
           value={metrics ? `${metrics.distance} m` : '—'}
-          sub="Total route length"
+          sub={t('totalRouteLength')}
         />
         <MetricCell
           icon={<Clock className="w-4 h-4 text-amber-400" />}
-          label="Est. Travel Time"
+          label={t('estTravelTime')}
           value={metrics ? `${metrics.time} s` : '—'}
-          sub="At 3.5 m/s speed"
+          sub={t('atSpeed')}
         />
         <MetricCell
           icon={<Shield className="w-4 h-4" style={{ color: safetyColor }} />}
-          label="Safety Score"
+          label={t('safetyScore')}
           value={metrics ? `${metrics.safety}%` : '—'}
-          sub="Risk-weighted route"
+          sub={t('riskWeightedRoute')}
           valueStyle={{ color: safetyColor }}
         />
       </div>
@@ -483,16 +483,16 @@ export default function SafePathNavigator({ terrainImageSrc }) {
         <div className="px-5 py-2.5 border-t border-border/30 bg-secondary/20 flex items-center gap-3 text-[10px] font-mono text-muted-foreground">
           <div className="flex items-center gap-1.5">
             <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-            <span>PATH ACTIVE</span>
+            <span>{t('pathActive')}</span>
           </div>
           <span>·</span>
-          <span>{path.length} waypoints</span>
+          <span>{path.length} {t('waypoints')}</span>
           <span>·</span>
           <span>A* Algorithm</span>
           <span>·</span>
           <span>Grid: {GRID_W}×{GRID_H}</span>
           <span>·</span>
-          <span className="text-primary">Click map to reposition markers</span>
+          <span className="text-primary">{t('clickMapReposition')}</span>
         </div>
       )}
     </motion.div>

@@ -4,11 +4,11 @@ import { Gauge, TrendingUp, TrendingDown, Minus, CheckCircle2, AlertTriangle, XC
 import { useLang } from '@/lib/LanguageContext';
 
 function getIoUGrade(score) {
-  if (score >= 0.90) return { grade: 'Excellent', color: 'text-vajra-green', bgColor: 'bg-vajra-green', borderColor: 'border-vajra-green', glow: 'glow-green', Icon: CheckCircle2, bar: 'from-vajra-green to-emerald-400' };
-  if (score >= 0.75) return { grade: 'Good',      color: 'text-primary',      bgColor: 'bg-primary',      borderColor: 'border-primary',      glow: 'glow-cyan',  Icon: TrendingUp,   bar: 'from-primary to-cyan-300' };
-  if (score >= 0.60) return { grade: 'Fair',      color: 'text-vajra-amber',  bgColor: 'bg-vajra-amber',  borderColor: 'border-vajra-amber',  glow: 'glow-amber', Icon: Minus,        bar: 'from-vajra-amber to-yellow-300' };
-  if (score >= 0.50) return { grade: 'Poor',      color: 'text-orange-400',   bgColor: 'bg-orange-400',   borderColor: 'border-orange-400',   glow: '',           Icon: TrendingDown, bar: 'from-orange-400 to-orange-300' };
-  return               { grade: 'Unacceptable', color: 'text-vajra-red',    bgColor: 'bg-vajra-red',    borderColor: 'border-vajra-red',    glow: 'glow-red',   Icon: XCircle,      bar: 'from-vajra-red to-red-400' };
+  if (score >= 0.90) return { gradeKey: 'gradeExcellent', color: 'text-vajra-green', bgColor: 'bg-vajra-green', borderColor: 'border-vajra-green', glow: 'glow-green', Icon: CheckCircle2, bar: 'from-vajra-green to-emerald-400' };
+  if (score >= 0.75) return { gradeKey: 'gradeGood',      color: 'text-primary',      bgColor: 'bg-primary',      borderColor: 'border-primary',      glow: 'glow-cyan',  Icon: TrendingUp,   bar: 'from-primary to-cyan-300' };
+  if (score >= 0.60) return { gradeKey: 'gradeFair',      color: 'text-vajra-amber',  bgColor: 'bg-vajra-amber',  borderColor: 'border-vajra-amber',  glow: 'glow-amber', Icon: Minus,        bar: 'from-vajra-amber to-yellow-300' };
+  if (score >= 0.50) return { gradeKey: 'gradePoor',      color: 'text-orange-400',   bgColor: 'bg-orange-400',   borderColor: 'border-orange-400',   glow: '',           Icon: TrendingDown, bar: 'from-orange-400 to-orange-300' };
+  return               { gradeKey: 'gradeUnacceptable', color: 'text-vajra-red',    bgColor: 'bg-vajra-red',    borderColor: 'border-vajra-red',    glow: 'glow-red',   Icon: XCircle,      bar: 'from-vajra-red to-red-400' };
 }
 
 function getIoUFeedback(score, lang) {
@@ -61,11 +61,11 @@ function getIoUFeedback(score, lang) {
 }
 
 const THRESHOLDS = [
-  { label: '≥0.90', desc: 'Excellent', color: 'bg-vajra-green' },
-  { label: '≥0.75', desc: 'Good',      color: 'bg-primary' },
-  { label: '≥0.60', desc: 'Fair',      color: 'bg-vajra-amber' },
-  { label: '≥0.50', desc: 'Poor',      color: 'bg-orange-400' },
-  { label: '<0.50',  desc: 'Unacceptable', color: 'bg-vajra-red' },
+  { label: '≥0.90', descKey: 'gradeExcellent', color: 'bg-vajra-green' },
+  { label: '≥0.75', descKey: 'gradeGood',      color: 'bg-primary' },
+  { label: '≥0.60', descKey: 'gradeFair',      color: 'bg-vajra-amber' },
+  { label: '≥0.50', descKey: 'gradePoor',      color: 'bg-orange-400' },
+  { label: '<0.50',  descKey: 'gradeUnacceptable', color: 'bg-vajra-red' },
 ];
 
 export default function IoUGauge({ iouScore }) {
@@ -96,7 +96,7 @@ export default function IoUGauge({ iouScore }) {
     return `M ${s.x} ${s.y} A ${radius} ${radius} 0 ${large} 1 ${e.x} ${e.y}`;
   }
 
-  const { Icon } = grade;
+  const { Icon, gradeKey } = grade;
 
   return (
     <motion.div
@@ -115,7 +115,7 @@ export default function IoUGauge({ iouScore }) {
         </div>
         <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full border ${grade.borderColor}/40 ${grade.bgColor}/10`}>
           <Icon className={`w-3.5 h-3.5 ${grade.color}`} />
-          <span className={`text-xs font-bold font-mono ${grade.color}`}>{grade.grade}</span>
+          <span className={`text-xs font-bold font-mono ${grade.color}`}>{t(gradeKey)}</span>
         </div>
       </div>
 
@@ -190,11 +190,11 @@ export default function IoUGauge({ iouScore }) {
 
           {/* Threshold legend */}
           <div className="grid grid-cols-1 gap-1">
-            {THRESHOLDS.map(({ label, desc, color }) => (
-              <div key={desc} className="flex items-center gap-2">
+            {THRESHOLDS.map(({ label, descKey, color }) => (
+              <div key={descKey} className="flex items-center gap-2">
                 <div className={`w-2 h-2 rounded-full ${color} flex-shrink-0`} />
                 <span className="text-[10px] font-mono text-muted-foreground">{label}</span>
-                <span className="text-[10px] text-foreground/70">{desc}</span>
+                <span className="text-[10px] text-foreground/70">{t(descKey)}</span>
               </div>
             ))}
           </div>
