@@ -1,15 +1,16 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { ShieldAlert, ShieldCheck, AlertTriangle } from 'lucide-react';
-import { Progress } from '@/components/ui/progress';
+import { useLang } from '@/lib/LanguageContext';
 
 const riskItems = [
-  { key: 'high', label: 'High Risk', color: 'text-vajra-red', bgColor: 'bg-vajra-red', icon: ShieldAlert },
-  { key: 'moderate', label: 'Moderate', color: 'text-vajra-amber', bgColor: 'bg-vajra-amber', icon: AlertTriangle },
-  { key: 'safe', label: 'Safe Zone', color: 'text-vajra-green', bgColor: 'bg-vajra-green', icon: ShieldCheck },
+  { key: 'high', labelKey: 'highRisk', color: 'text-vajra-red', bgColor: 'bg-vajra-red', Icon: ShieldAlert },
+  { key: 'moderate', labelKey: 'moderate', color: 'text-vajra-amber', bgColor: 'bg-vajra-amber', Icon: AlertTriangle },
+  { key: 'safe', labelKey: 'safeZone', color: 'text-vajra-green', bgColor: 'bg-vajra-green', Icon: ShieldCheck },
 ];
 
 export default function RiskSummary({ riskPercentages }) {
+  const { t } = useLang();
   if (!riskPercentages) return null;
 
   return (
@@ -20,15 +21,15 @@ export default function RiskSummary({ riskPercentages }) {
       className="space-y-4"
     >
       <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        Risk Distribution
+        {t('riskDistribution')}
       </h3>
       <div className="space-y-3">
-        {riskItems.map(({ key, label, color, bgColor, icon: Icon }) => (
+        {riskItems.map(({ key, labelKey, color, bgColor, Icon }) => (
           <div key={key} className="space-y-1.5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Icon className={`w-3.5 h-3.5 ${color}`} />
-                <span className="text-xs font-medium text-foreground/80">{label}</span>
+                <span className="text-xs font-medium text-foreground/80">{t(labelKey)}</span>
               </div>
               <span className={`text-sm font-bold font-mono ${color}`}>
                 {riskPercentages[key]}%

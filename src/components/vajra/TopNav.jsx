@@ -1,18 +1,22 @@
 import React from 'react';
 import { Shield, Wifi, Activity } from 'lucide-react';
+import { useLang } from '@/lib/LanguageContext';
+import LanguageSwitcher from './LanguageSwitcher';
 
 export default function TopNav({ systemStatus }) {
-  const statusColor = systemStatus === 'online' 
-    ? 'text-vajra-green' 
-    : systemStatus === 'analyzing' 
-    ? 'text-vajra-amber' 
+  const { t } = useLang();
+
+  const statusColor = systemStatus === 'online'
+    ? 'text-vajra-green'
+    : systemStatus === 'analyzing'
+    ? 'text-vajra-amber'
     : 'text-muted-foreground';
 
-  const statusLabel = systemStatus === 'online' 
-    ? 'System Online' 
-    : systemStatus === 'analyzing' 
-    ? 'Analyzing...' 
-    : 'Idle';
+  const statusLabel = systemStatus === 'online'
+    ? t('systemOnline')
+    : systemStatus === 'analyzing'
+    ? t('analyzing')
+    : t('idle');
 
   return (
     <header className="h-16 border-b border-border/50 bg-card/80 backdrop-blur-xl flex items-center justify-between px-6 relative z-50">
@@ -25,8 +29,8 @@ export default function TopNav({ systemStatus }) {
           <h1 className="text-lg font-bold tracking-tight text-foreground leading-none">
             VAJRA<span className="text-primary"> DRISTI</span>
           </h1>
-          <p className="text-[10px] font-mono text-muted-foreground tracking-[0.2em] uppercase">
-            Intelligent Terrain Vision
+          <p className="text-[10px] font-mono text-muted-foreground tracking-[0.15em] uppercase">
+            {t('appTagline')}
           </p>
         </div>
       </div>
@@ -38,14 +42,15 @@ export default function TopNav({ systemStatus }) {
       </div>
 
       <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
+        <div className="hidden sm:flex items-center gap-2">
           <Activity className={`w-4 h-4 ${statusColor}`} />
           <span className={`text-xs font-mono ${statusColor}`}>{statusLabel}</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="hidden sm:flex items-center gap-2">
           <Wifi className="w-4 h-4 text-vajra-green" />
-          <span className="text-xs font-mono text-vajra-green">Connected</span>
+          <span className="text-xs font-mono text-vajra-green">{t('connected')}</span>
         </div>
+        <LanguageSwitcher />
       </div>
     </header>
   );

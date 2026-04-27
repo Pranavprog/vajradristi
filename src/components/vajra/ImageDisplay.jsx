@@ -1,7 +1,10 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { useLang } from '@/lib/LanguageContext';
 
-export default function ImageDisplay({ title, imageSrc, label, delay = 0 }) {
+export default function ImageDisplay({ titleKey, imageSrc, labelKey, delay = 0 }) {
+  const { t } = useLang();
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -11,11 +14,11 @@ export default function ImageDisplay({ title, imageSrc, label, delay = 0 }) {
     >
       <div className="flex items-center justify-between">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          {title}
+          {t(titleKey)}
         </h3>
-        {label && (
+        {labelKey && (
           <span className="text-[10px] font-mono text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-            {label}
+            {t(labelKey)}
           </span>
         )}
       </div>
@@ -24,10 +27,9 @@ export default function ImageDisplay({ title, imageSrc, label, delay = 0 }) {
           <>
             <img
               src={imageSrc}
-              alt={title}
+              alt={t(titleKey)}
               className="w-full aspect-video object-cover"
             />
-            {/* Scan line overlay */}
             <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-0 group-hover:opacity-100 transition-opacity">
               <div className="w-full h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent animate-scanline" />
             </div>
@@ -39,7 +41,7 @@ export default function ImageDisplay({ title, imageSrc, label, delay = 0 }) {
               <div className="w-10 h-10 rounded-lg bg-secondary/50 flex items-center justify-center mx-auto mb-2">
                 <div className="w-3 h-3 rounded-sm bg-muted-foreground/20" />
               </div>
-              <p className="text-xs text-muted-foreground/50 font-mono">Awaiting data</p>
+              <p className="text-xs text-muted-foreground/50 font-mono">{t('awaitingData')}</p>
             </div>
           </div>
         )}

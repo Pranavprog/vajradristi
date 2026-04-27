@@ -1,8 +1,10 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Brain, ChevronRight } from 'lucide-react';
+import { useLang } from '@/lib/LanguageContext';
 
 export default function ExplainableAI({ explanations }) {
+  const { t } = useLang();
   if (!explanations || explanations.length === 0) return null;
 
   return (
@@ -15,7 +17,7 @@ export default function ExplainableAI({ explanations }) {
       <div className="flex items-center gap-2 mb-3">
         <Brain className="w-4 h-4 text-vajra-purple" />
         <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Explainable AI — Why This Decision?
+          {t('explainableAI')}
         </h3>
       </div>
       <div className="space-y-2">

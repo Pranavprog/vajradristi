@@ -1,9 +1,10 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
 import { Upload, Play, RotateCcw, ImageIcon, Loader2, Crosshair } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useLang } from '@/lib/LanguageContext';
 
 export default function UploadPanel({ onImageSelect, onPredict, onReset, selectedImage, isLoading }) {
+  const { t } = useLang();
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef(null);
 
@@ -11,9 +12,7 @@ export default function UploadPanel({ onImageSelect, onPredict, onReset, selecte
     e.preventDefault();
     setIsDragging(false);
     const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith('image/')) {
-      onImageSelect(file);
-    }
+    if (file && file.type.startsWith('image/')) onImageSelect(file);
   }, [onImageSelect]);
 
   const handleDragOver = useCallback((e) => {
@@ -21,9 +20,7 @@ export default function UploadPanel({ onImageSelect, onPredict, onReset, selecte
     setIsDragging(true);
   }, []);
 
-  const handleDragLeave = useCallback(() => {
-    setIsDragging(false);
-  }, []);
+  const handleDragLeave = useCallback(() => setIsDragging(false), []);
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
@@ -35,7 +32,7 @@ export default function UploadPanel({ onImageSelect, onPredict, onReset, selecte
       <div className="flex items-center gap-2 mb-1">
         <Crosshair className="w-4 h-4 text-primary" />
         <h2 className="text-sm font-semibold text-foreground uppercase tracking-wider">
-          Image Input
+          {t('imageInput')}
         </h2>
       </div>
 
@@ -47,10 +44,10 @@ export default function UploadPanel({ onImageSelect, onPredict, onReset, selecte
         onClick={() => fileInputRef.current?.click()}
         className={`
           relative cursor-pointer rounded-lg border-2 border-dashed transition-all duration-300 overflow-hidden
-          ${isDragging 
-            ? 'border-primary bg-primary/5 glow-cyan' 
-            : selectedImage 
-            ? 'border-border bg-secondary/30' 
+          ${isDragging
+            ? 'border-primary bg-primary/5 glow-cyan'
+            : selectedImage
+            ? 'border-border bg-secondary/30'
             : 'border-border/50 hover:border-primary/50 bg-secondary/20 hover:bg-secondary/30'}
         `}
       >
@@ -75,19 +72,12 @@ export default function UploadPanel({ onImageSelect, onPredict, onReset, selecte
               <ImageIcon className="w-6 h-6 text-primary" />
             </div>
             <div className="text-center">
-              <p className="text-sm font-medium text-foreground/80">
-                Drop terrain image here
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                or click to browse
-              </p>
+              <p className="text-sm font-medium text-foreground/80">{t('dropZoneTitle')}</p>
+              <p className="text-xs text-muted-foreground mt-1">{t('dropZoneSubtitle')}</p>
             </div>
-            <p className="text-[10px] font-mono text-muted-foreground">
-              PNG, JPG up to 10MB
-            </p>
+            <p className="text-[10px] font-mono text-muted-foreground">{t('dropZoneFormat')}</p>
           </div>
         )}
-
         <input
           ref={fileInputRef}
           type="file"
@@ -106,7 +96,7 @@ export default function UploadPanel({ onImageSelect, onPredict, onReset, selecte
           size="sm"
         >
           <Upload className="w-4 h-4 mr-2" />
-          Upload Image
+          {t('uploadImage')}
         </Button>
 
         <Button
@@ -118,12 +108,12 @@ export default function UploadPanel({ onImageSelect, onPredict, onReset, selecte
           {isLoading ? (
             <>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Analyzing...
+              {t('analyzingBtn')}
             </>
           ) : (
             <>
               <Play className="w-4 h-4 mr-2" />
-              Run Prediction
+              {t('runPrediction')}
             </>
           )}
         </Button>
@@ -135,7 +125,7 @@ export default function UploadPanel({ onImageSelect, onPredict, onReset, selecte
           size="sm"
         >
           <RotateCcw className="w-4 h-4 mr-2" />
-          Reset
+          {t('reset')}
         </Button>
       </div>
     </div>

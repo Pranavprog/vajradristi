@@ -1,8 +1,11 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { ScanEye, ArrowLeft } from 'lucide-react';
+import { useLang } from '@/lib/LanguageContext';
 
 export default function EmptyState() {
+  const { t } = useLang();
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -18,17 +21,11 @@ export default function EmptyState() {
           <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
         </div>
       </div>
-
-      <h3 className="text-xl font-semibold text-foreground/70 mb-2">
-        Ready to Analyze
-      </h3>
-      <p className="text-sm text-muted-foreground max-w-sm mb-6">
-        Upload a terrain image and run the prediction model to see segmentation, risk analysis, and safe path recommendations.
-      </p>
-
+      <h3 className="text-xl font-semibold text-foreground/70 mb-2">{t('readyToAnalyze')}</h3>
+      <p className="text-sm text-muted-foreground max-w-sm mb-6">{t('emptyStateDesc')}</p>
       <div className="flex items-center gap-2 text-xs text-primary/60">
         <ArrowLeft className="w-4 h-4" />
-        <span className="font-mono">Upload an image to begin</span>
+        <span className="font-mono">{t('uploadToBegin')}</span>
       </div>
     </motion.div>
   );

@@ -1,8 +1,10 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AlertTriangle, X } from 'lucide-react';
+import { useLang } from '@/lib/LanguageContext';
 
 export default function AlertBanner({ alert, onDismiss }) {
+  const { t } = useLang();
   if (!alert) return null;
 
   return (
@@ -25,6 +27,7 @@ export default function AlertBanner({ alert, onDismiss }) {
             </div>
             <button
               onClick={onDismiss}
+              title={t('dismiss')}
               className="text-vajra-red/60 hover:text-vajra-red transition-colors"
             >
               <X className="w-4 h-4" />

@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { toast } from 'sonner';
+import { useLang } from '../lib/LanguageContext';
 
 import TopNav from '../components/vajra/TopNav';
 import AlertBanner from '../components/vajra/AlertBanner';
@@ -17,6 +18,7 @@ import EmptyState from '../components/vajra/EmptyState';
 const API_BASE_URL = ''; // Set your API base URL here
 
 export default function Dashboard() {
+  const { t } = useLang();
   const [selectedImage, setSelectedImage] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState(null);
@@ -55,7 +57,7 @@ export default function Dashboard() {
         setAlert(data.alerts);
       }
 
-      toast.success('Terrain analysis complete');
+      toast.success(t('analysisComplete'));
     } catch (error) {
       setSystemStatus('online');
       // Demo fallback - show sample data for presentation
@@ -79,7 +81,7 @@ export default function Dashboard() {
       };
       setResult(demoResult);
       setAlert(demoResult.alerts);
-      toast.info('Showing demo analysis (API unavailable)');
+      toast.info(t('demoAnalysis'));
     } finally {
       setIsLoading(false);
     }
@@ -133,7 +135,7 @@ export default function Dashboard() {
               {/* Image Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 <ImageDisplay
-                  title="Original Image"
+                  titleKey="originalImage"
                   imageSrc={
                     result.original_image
                       ? `data:image/png;base64,${result.original_image}`
@@ -141,27 +143,27 @@ export default function Dashboard() {
                       ? URL.createObjectURL(selectedImage)
                       : null
                   }
-                  label="Input"
+                  labelKey="inputLabel"
                   delay={0.1}
                 />
                 <ImageDisplay
-                  title="Segmentation Output"
+                  titleKey="segmentationOutput"
                   imageSrc={
                     result.segmentation_image
                       ? `data:image/png;base64,${result.segmentation_image}`
                       : null
                   }
-                  label="AI Model"
+                  labelKey="aiModelLabel"
                   delay={0.2}
                 />
                 <ImageDisplay
-                  title="Risk Heatmap"
+                  titleKey="riskHeatmap"
                   imageSrc={
                     result.risk_map_image
                       ? `data:image/png;base64,${result.risk_map_image}`
                       : null
                   }
-                  label="Analysis"
+                  labelKey="analysisLabel"
                   delay={0.3}
                 />
               </div>

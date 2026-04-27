@@ -1,17 +1,19 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Mountain } from 'lucide-react';
+import { useLang } from '@/lib/LanguageContext';
 
 export default function TerrainScore({ score }) {
+  const { t } = useLang();
   if (score === null || score === undefined) return null;
 
   const getLabel = (s) => {
-    if (s <= 3) return { text: 'Low', color: 'text-vajra-green', glow: 'glow-green' };
-    if (s <= 6) return { text: 'Moderate', color: 'text-vajra-amber', glow: 'glow-amber' };
-    return { text: 'High', color: 'text-vajra-red', glow: 'glow-red' };
+    if (s <= 3) return { labelKey: 'lowDifficulty', color: 'text-vajra-green', glow: 'glow-green' };
+    if (s <= 6) return { labelKey: 'moderateDifficulty', color: 'text-vajra-amber', glow: 'glow-amber' };
+    return { labelKey: 'highDifficulty', color: 'text-vajra-red', glow: 'glow-red' };
   };
 
-  const { text, color, glow } = getLabel(score);
+  const { labelKey, color, glow } = getLabel(score);
   const percentage = (score / 10) * 100;
 
   return (
@@ -24,14 +26,12 @@ export default function TerrainScore({ score }) {
       <div className="flex items-center gap-2 mb-3">
         <Mountain className="w-4 h-4 text-primary" />
         <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Terrain Difficulty
+          {t('terrainDifficulty')}
         </h3>
       </div>
 
       <div className="flex items-end gap-3 mb-3">
-        <span className={`text-4xl font-bold font-mono ${color}`}>
-          {score}
-        </span>
+        <span className={`text-4xl font-bold font-mono ${color}`}>{score}</span>
         <span className="text-lg text-muted-foreground font-mono mb-1">/ 10</span>
       </div>
 
@@ -46,7 +46,7 @@ export default function TerrainScore({ score }) {
 
       <div className="flex items-center justify-between">
         <span className={`text-xs font-semibold ${color} uppercase tracking-wider`}>
-          {text} Difficulty
+          {t(labelKey)}
         </span>
         <div className="flex gap-1">
           {Array.from({ length: 10 }).map((_, i) => (

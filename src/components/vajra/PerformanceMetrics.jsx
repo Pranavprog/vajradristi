@@ -1,18 +1,18 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Gauge, Timer, ScanSearch } from 'lucide-react';
-
-const metrics = [
-  { key: 'iou', label: 'IoU Score', icon: Gauge, format: (v) => v?.toFixed(2) },
-  { key: 'time', label: 'Inference Time', icon: Timer, format: (v) => v },
-  { key: 'objects', label: 'Objects Detected', icon: ScanSearch, format: (v) => v },
-];
+import { useLang } from '@/lib/LanguageContext';
 
 export default function PerformanceMetrics({ iouScore, inferenceTime, objectsDetected }) {
-  const values = { iou: iouScore, time: inferenceTime, objects: objectsDetected };
-  const hasData = iouScore !== undefined;
+  const { t } = useLang();
 
-  if (!hasData) return null;
+  const metrics = [
+    { labelKey: 'iouScore', Icon: Gauge, value: iouScore?.toFixed(2) },
+    { labelKey: 'inferenceTime', Icon: Timer, value: inferenceTime },
+    { labelKey: 'objectsDetected', Icon: ScanSearch, value: objectsDetected },
+  ];
+
+  if (iouScore === undefined) return null;
 
   return (
     <motion.div
@@ -22,23 +22,21 @@ export default function PerformanceMetrics({ iouScore, inferenceTime, objectsDet
       className="space-y-3"
     >
       <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        Performance
+        {t('performance')}
       </h3>
       <div className="grid grid-cols-3 gap-2">
-        {metrics.map(({ key, label, icon: Icon, format }, idx) => (
+        {metrics.map(({ labelKey, Icon, value }, idx) => (
           <motion.div
-            key={key}
+            key={labelKey}
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.6 + idx * 0.1 }}
             className="rounded-lg border border-border/50 bg-card/50 p-3 text-center"
           >
             <Icon className="w-4 h-4 text-primary mx-auto mb-1.5" />
-            <p className="text-lg font-bold font-mono text-foreground">
-              {format(values[key])}
-            </p>
+            <p className="text-lg font-bold font-mono text-foreground">{value}</p>
             <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mt-0.5">
-              {label}
+              {t(labelKey)}
             </p>
           </motion.div>
         ))}
