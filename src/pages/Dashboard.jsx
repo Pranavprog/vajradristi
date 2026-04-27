@@ -16,6 +16,7 @@ import IoUGauge from '../components/vajra/IoUGauge';
 import DownloadButtons from '../components/vajra/DownloadButtons';
 import LoadingOverlay from '../components/vajra/LoadingOverlay';
 import EmptyState from '../components/vajra/EmptyState';
+import SafePathNavigator from '../components/vajra/SafePathNavigator';
 
 const API_BASE_URL = ''; // Set your API base URL here
 
@@ -172,6 +173,17 @@ export default function Dashboard() {
 
               {/* IoU Gauge — primary metric */}
               <IoUGauge iouScore={result.iou_score} />
+
+              {/* Dynamic Safe Path Navigator */}
+              <SafePathNavigator
+                terrainImageSrc={
+                  result.original_image
+                    ? `data:image/png;base64,${result.original_image}`
+                    : selectedImage
+                    ? URL.createObjectURL(selectedImage)
+                    : null
+                }
+              />
 
               {/* Safe Path + Metrics Row */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
