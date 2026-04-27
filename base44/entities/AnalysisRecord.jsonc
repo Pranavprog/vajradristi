@@ -1,0 +1,57 @@
+{
+  "name": "AnalysisRecord",
+  "type": "object",
+  "properties": {
+    "image_name": {
+      "type": "string",
+      "description": "Original uploaded image filename"
+    },
+    "segmentation_image": {
+      "type": "string",
+      "description": "Base64 segmentation output image"
+    },
+    "risk_map_image": {
+      "type": "string",
+      "description": "Base64 risk heatmap image"
+    },
+    "iou_score": {
+      "type": "number",
+      "description": "Intersection over Union score"
+    },
+    "inference_time": {
+      "type": "string",
+      "description": "Model inference time string"
+    },
+    "objects_detected": {
+      "type": "number",
+      "description": "Number of objects/clusters detected"
+    },
+    "terrain_difficulty": {
+      "type": "number",
+      "description": "Terrain difficulty score 1-10"
+    },
+    "risk_high": {
+      "type": "number",
+      "description": "High risk percentage"
+    },
+    "risk_moderate": {
+      "type": "number",
+      "description": "Moderate risk percentage"
+    },
+    "risk_safe": {
+      "type": "number",
+      "description": "Safe zone percentage"
+    },
+    "alert": {
+      "type": "string",
+      "description": "Alert message if any"
+    },
+    "notes": {
+      "type": "string",
+      "description": "User notes about this analysis"
+    }
+  },
+  "required": [
+    "image_name"
+  ]
+}

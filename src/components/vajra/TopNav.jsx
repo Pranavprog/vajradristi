@@ -3,7 +3,7 @@ import { Shield, Wifi, Activity } from 'lucide-react';
 import { useLang } from '@/lib/LanguageContext';
 import LanguageSwitcher from './LanguageSwitcher';
 
-export default function TopNav({ systemStatus }) {
+export default function TopNav({ systemStatus, children }) {
   const { t } = useLang();
 
   const statusColor = systemStatus === 'online'
@@ -50,6 +50,7 @@ export default function TopNav({ systemStatus }) {
           <Wifi className="w-4 h-4 text-vajra-green" />
           <span className="text-xs font-mono text-vajra-green">{t('connected')}</span>
         </div>
+        {children}
         <LanguageSwitcher />
       </div>
     </header>

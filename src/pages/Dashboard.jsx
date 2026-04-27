@@ -1,6 +1,9 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useLang } from '../lib/LanguageContext';
+import { base44 } from '@/api/base44Client';
+import { Link } from 'react-router-dom';
+import { History } from 'lucide-react';
 
 import { generateSegmentationDemo, generateRiskHeatmapDemo, generateSafePathDemo, getDemoMetrics } from '../lib/demoImages';
 import TopNav from '../components/vajra/TopNav';
@@ -62,6 +65,22 @@ export default function Dashboard() {
       }
 
       toast.success(t('analysisComplete'));
+      // Save to history
+      if (data) {
+        base44.entities.AnalysisRecord.create({
+          image_name: selectedImage.name,
+          segmentation_image: data.segmentation_image || null,
+          risk_map_image: data.risk_map_image || null,
+          iou_score: data.iou_score,
+          inference_time: data.inference_time,
+          objects_detected: data.objects_detected,
+          terrain_difficulty: data.terrain_difficulty,
+          risk_high: data.risk_percentages?.high,
+          risk_moderate: data.risk_percentages?.moderate,
+          risk_safe: data.risk_percentages?.safe,
+          alert: data.alerts || null,
+        }).catch(() => {});
+      }
     } catch (error) {
       setSystemStatus('online');
       // Demo fallback — derive ALL outputs from the actual uploaded image pixels
@@ -82,6 +101,20 @@ export default function Dashboard() {
       setResult(demoResult);
       if (demoResult.alerts) setAlert(demoResult.alerts);
       toast.info(t('demoAnalysis'));
+      // Save demo result to history
+      base44.entities.AnalysisRecord.create({
+        image_name: selectedImage.name,
+        segmentation_image: demoResult.segmentation_image || null,
+        risk_map_image: demoResult.risk_map_image || null,
+        iou_score: demoMetrics.iou_score,
+        inference_time: demoMetrics.inference_time,
+        objects_detected: demoMetrics.objects_detected,
+        terrain_difficulty: demoMetrics.terrain_difficulty,
+        risk_high: demoMetrics.risk_percentages?.high,
+        risk_moderate: demoMetrics.risk_percentages?.moderate,
+        risk_safe: demoMetrics.risk_percentages?.safe,
+        alert: demoResult.alerts || null,
+      }).catch(() => {});
     } finally {
       setIsLoading(false);
     }
@@ -110,7 +143,15 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-background bg-grid font-inter">
       <LoadingOverlay isLoading={isLoading} />
-      <TopNav systemStatus={systemStatus} />
+      <TopNav systemStatus={systemStatus}>
+        <Link
+          to="/history"
+          className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground hover:text-primary transition-colors px-3 py-1.5 rounded-md hover:bg-primary/10 border border-transparent hover:border-primary/20"
+        >
+          <History className="w-3.5 h-3.5" />
+          History
+        </Link>
+      </TopNav>
       <AlertBanner alert={alert} onDismiss={() => setAlert(null)} />
 
       <div className="flex flex-col lg:flex-row h-[calc(100vh-4rem)]">
