@@ -33,32 +33,36 @@ function analyseImagePixels(sourceImg, gridW = 32, gridH = 24) {
   tc.drawImage(sourceImg, 0, 0, gridW, gridH);
   const { data } = tc.getImageData(0, 0, gridW, gridH);
 
-  const riskGrid = new Float32Array(gridW * gridH);
+  const rawRisk = new Float32Array(gridW * gridH);
 
   for (let i = 0; i < gridW * gridH; i++) {
     const r = data[i * 4]     / 255;
     const g = data[i * 4 + 1] / 255;
     const b = data[i * 4 + 2] / 255;
 
-    // Brightness-based risk: dark/shadowed areas → high risk
     const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
-    // Redness: reddish/brownish areas → rocks / obstacles
-    const redness = Math.max(0, r - Math.max(g, b) * 0.9);
-    // Greenness: lush green → safe
-    const greenness = Math.max(0, g - Math.max(r, b) * 0.85);
-    // Blueness: sky/water → background (low risk)
-    const blueness = Math.max(0, b - Math.max(r, g) * 0.85);
+    const redness    = Math.max(0, r - Math.max(g, b) * 0.85);
+    const greenness  = Math.max(0, g - Math.max(r, b) * 0.8);
+    const blueness   = Math.max(0, b - Math.max(r, g) * 0.8);
 
-    // Risk score: high when dark, reddish or brownish; low when green/blue
-    let risk = (1 - brightness) * 0.5 + redness * 1.2 - greenness * 0.8 - blueness * 0.4;
-    risk = Math.max(0, Math.min(1, risk));
-    riskGrid[i] = risk;
+    let risk = (1 - brightness) * 0.45 + redness * 0.9 - greenness * 0.6 - blueness * 0.3;
+    rawRisk[i] = Math.max(0, Math.min(1, risk));
   }
 
-  // Identify zone centres from grid
-  const highZones = [], modZones = [], safeZones = [];
+  // Normalize to spread values across [0,1] so thresholds work for any image
+  let minR = 1, maxR = 0;
+  for (let i = 0; i < rawRisk.length; i++) {
+    if (rawRisk[i] < minR) minR = rawRisk[i];
+    if (rawRisk[i] > maxR) maxR = rawRisk[i];
+  }
+  const span = maxR - minR || 1;
+  const riskGrid = new Float32Array(gridW * gridH);
+  for (let i = 0; i < rawRisk.length; i++) {
+    riskGrid[i] = (rawRisk[i] - minR) / span;
+  }
 
-  // Cluster cells into zones by sampling
+  // Identify zone centres from grid (using normalized values)
+  const highZones = [], modZones = [], safeZones = [];
   const visited = new Uint8Array(gridW * gridH);
   for (let y = 1; y < gridH - 1; y += 3) {
     for (let x = 1; x < gridW - 1; x += 3) {
@@ -71,9 +75,9 @@ function analyseImagePixels(sourceImg, gridW = 32, gridH = 24) {
         y: (y + 0.5) / gridH,
         r: 0.07 + risk * 0.10,
       };
-      if (risk > 0.65) highZones.push(zone);
+      if (risk > 0.60)      highZones.push(zone);
       else if (risk > 0.35) modZones.push(zone);
-      else safeZones.push(zone);
+      else                  safeZones.push(zone);
     }
   }
 
@@ -110,7 +114,7 @@ export async function generateSegmentationDemo(imageFile, width = 800, height = 
     classGrid = new Uint8Array(gridW * gridH);
     for (let i = 0; i < gridW * gridH; i++) {
       const r = analysis.riskGrid[i];
-      classGrid[i] = r > 0.60 ? 2 : r > 0.32 ? 1 : 0;
+      classGrid[i] = r > 0.60 ? 2 : r > 0.35 ? 1 : 0;
     }
   } else {
     // Fallback: simple gradient pattern
@@ -357,9 +361,9 @@ export async function getDemoMetrics(imageFile) {
   let highCount = 0, modCount = 0, safeCount = 0;
   for (let i = 0; i < total; i++) {
     const r = riskGrid[i];
-    if (r > 0.65) highCount++;
+    if (r > 0.60)      highCount++;
     else if (r > 0.35) modCount++;
-    else safeCount++;
+    else               safeCount++;
   }
 
   const highPct  = Math.round((highCount / total) * 100);

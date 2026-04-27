@@ -37,9 +37,9 @@ function buildGridFromImage(imageFile) {
       tc.drawImage(img, 0, 0, GRID_W, GRID_H);
       const { data } = tc.getImageData(0, 0, GRID_W, GRID_H);
 
-      const grid = [];
+      // First pass: compute raw risk scores
+      const rawRisk = new Float32Array(GRID_W * GRID_H);
       for (let gy = 0; gy < GRID_H; gy++) {
-        grid[gy] = [];
         for (let gx = 0; gx < GRID_W; gx++) {
           const i = (gy * GRID_W + gx) * 4;
           const r = data[i] / 255;
@@ -47,17 +47,34 @@ function buildGridFromImage(imageFile) {
           const b = data[i + 2] / 255;
 
           const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
-          const redness    = Math.max(0, r - Math.max(g, b) * 0.9);
-          const greenness  = Math.max(0, g - Math.max(r, b) * 0.85);
-          const blueness   = Math.max(0, b - Math.max(r, g) * 0.85);
+          const redness    = Math.max(0, r - Math.max(g, b) * 0.85);
+          const greenness  = Math.max(0, g - Math.max(r, b) * 0.8);
+          const blueness   = Math.max(0, b - Math.max(r, g) * 0.8);
 
-          let risk = (1 - brightness) * 0.5 + redness * 1.2 - greenness * 0.8 - blueness * 0.4;
-          risk = Math.max(0, Math.min(1, risk));
+          // Darker + reddish = higher risk; bright/green/blue = safer
+          let risk = (1 - brightness) * 0.45 + redness * 0.9 - greenness * 0.6 - blueness * 0.3;
+          rawRisk[gy * GRID_W + gx] = Math.max(0, Math.min(1, risk));
+        }
+      }
+
+      // Second pass: normalize to spread risk across full [0,1] range
+      let minR = 1, maxR = 0;
+      for (let i = 0; i < rawRisk.length; i++) {
+        if (rawRisk[i] < minR) minR = rawRisk[i];
+        if (rawRisk[i] > maxR) maxR = rawRisk[i];
+      }
+      const span = maxR - minR || 1;
+
+      const grid = [];
+      for (let gy = 0; gy < GRID_H; gy++) {
+        grid[gy] = [];
+        for (let gx = 0; gx < GRID_W; gx++) {
+          const norm = (rawRisk[gy * GRID_W + gx] - minR) / span; // 0..1 normalized
 
           let type, weight;
-          if (risk > 0.75)      { type = 'obstacle'; weight = TERRAIN_CLASSES.obstacle.weight; }
-          else if (risk > 0.58) { type = 'high';     weight = TERRAIN_CLASSES.high.weight;     }
-          else if (risk > 0.32) { type = 'moderate'; weight = TERRAIN_CLASSES.moderate.weight; }
+          if (norm > 0.82)      { type = 'obstacle'; weight = TERRAIN_CLASSES.obstacle.weight; }
+          else if (norm > 0.60) { type = 'high';     weight = TERRAIN_CLASSES.high.weight;     }
+          else if (norm > 0.35) { type = 'moderate'; weight = TERRAIN_CLASSES.moderate.weight; }
           else                  { type = 'safe';     weight = TERRAIN_CLASSES.safe.weight;     }
 
           grid[gy][gx] = { gx, gy, risk: weight, type, f: 0, g: 0, h: 0, parent: null };
@@ -253,51 +270,40 @@ function drawLegend(ctx, labels = ['Safe Zone', 'Moderate Risk', 'High Risk', 'O
 
 export default function SafePathNavigator({ terrainImageSrc, imageFile }) {
   const { t, lang } = useLang();
-  const canvasRef  = useRef(null);
-  const animRef    = useRef(null);
-  const gridRef    = useRef(null);
-  const blobsRef   = useRef(DEFAULT_BLOBS);
+  const canvasRef    = useRef(null);
+  const animRef      = useRef(null);
+  const gridRef      = useRef(null);
+  const blobsRef     = useRef(DEFAULT_BLOBS);
+  const startRef     = useRef({ gx: 4, gy: 38 });
+  const destRef      = useRef({ gx: 56, gy: 6 });
 
-  const [start, setStart]       = useState({ gx: 4,  gy: 38 });
-  const [dest,  setDest]        = useState({ gx: 56, gy: 6  });
-  const [path,  setPath]        = useState(null);
-  const [metrics, setMetrics]   = useState(null);
-  const [clickMode, setClickMode] = useState(null); // 'start' | 'dest' | null
-  const [animProg, setAnimProg] = useState(1);
-  const [isCalc,  setIsCalc]    = useState(false);
-  const [noPath,  setNoPath]    = useState(false);
+  const [start, setStart]         = useState({ gx: 4,  gy: 38 });
+  const [dest,  setDest]          = useState({ gx: 56, gy: 6  });
+  const [path,  setPath]          = useState(null);
+  const [metrics, setMetrics]     = useState(null);
+  const [clickMode, setClickMode] = useState(null);
+  const [animProg, setAnimProg]   = useState(1);
+  const [noPath,  setNoPath]      = useState(false);
 
-  // Rebuild grid from image whenever imageFile changes
-  useEffect(() => {
-    if (imageFile) {
-      buildGridFromImage(imageFile).then(grid => {
-        gridRef.current = grid;
-        runPathfinding(start, dest, grid);
-      });
-    } else {
-      gridRef.current = buildDemoGrid(GRID_W, GRID_H, blobsRef.current);
-      runPathfinding(start, dest, gridRef.current);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [imageFile]);
+  // Keep refs in sync so callbacks always have latest values
+  useEffect(() => { startRef.current = start; }, [start]);
+  useEffect(() => { destRef.current  = dest;  }, [dest]);
 
-  // Run A*
+  // Run A* — defined first so it can be called anywhere below
   const runPathfinding = useCallback((s, d, grid) => {
-    setIsCalc(true);
+    if (!grid) return;
     setNoPath(false);
-    const t0 = performance.now();
+    if (animRef.current) cancelAnimationFrame(animRef.current);
+
     const found = astar(grid, s, d, GRID_W, GRID_H);
-    const elapsed = performance.now() - t0;
-    console.log(`A* time: ${elapsed.toFixed(1)}ms`);
     if (found) {
       setPath(found);
       setMetrics(computePathMetrics(found, GRID_W, GRID_H, CANVAS_W, CANVAS_H));
       setNoPath(false);
-      // Animate draw
       setAnimProg(0);
       let prog = 0;
       const step = () => {
-        prog = Math.min(1, prog + 0.025);
+        prog = Math.min(1, prog + 0.03);
         setAnimProg(prog);
         if (prog < 1) animRef.current = requestAnimationFrame(step);
       };
@@ -307,10 +313,26 @@ export default function SafePathNavigator({ terrainImageSrc, imageFile }) {
       setMetrics(null);
       setNoPath(true);
     }
-    setIsCalc(false);
   }, []);
 
-  // Re-run pathfinding when start/dest change (grid already built)
+  // Rebuild grid whenever imageFile changes
+  useEffect(() => {
+    const s = startRef.current;
+    const d = destRef.current;
+    if (imageFile) {
+      buildGridFromImage(imageFile).then(grid => {
+        gridRef.current = grid;
+        runPathfinding(s, d, grid);
+      });
+    } else {
+      const grid = buildDemoGrid(GRID_W, GRID_H, blobsRef.current);
+      gridRef.current = grid;
+      runPathfinding(s, d, grid);
+    }
+    return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
+  }, [imageFile, runPathfinding]);
+
+  // Re-run pathfinding when start/dest change
   useEffect(() => {
     if (!gridRef.current) return;
     runPathfinding(start, dest, gridRef.current);
