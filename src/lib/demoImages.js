@@ -83,121 +83,127 @@ function analyseImagePixels(sourceImg, gridW = 32, gridH = 24) {
 // ─── SEGMENTATION ────────────────────────────────────────────────────────────
 
 export async function generateSegmentationDemo(imageFile, width = 800, height = 600) {
+  const HEADER_H = 32;
+  const FOOTER_H = 20;
+  const gridW = 80, gridH = 60;
+
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext('2d');
 
-  let analysis = null;
-
+  // Draw background image (if provided)
   if (imageFile) {
-    // Draw the actual image as base layer
     const sourceImg = await loadImage(imageFile);
     ctx.drawImage(sourceImg, 0, 0, width, height);
-    analysis = analyseImagePixels(sourceImg);
-
-    // Apply dark overlay so segmentation colours read clearly
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.fillRect(0, 0, width, height);
   } else {
-    // Fallback background
     const bg = ctx.createLinearGradient(0, 0, 0, height);
     bg.addColorStop(0, '#0b1a2e'); bg.addColorStop(1, '#163d1e');
     ctx.fillStyle = bg; ctx.fillRect(0, 0, width, height);
   }
 
-  const { highZones = [], modZones = [], safeZones = [] } = analysis || {
-    highZones: [
-      { x: 0.14, y: 0.61, r: 0.13 }, { x: 0.63, y: 0.55, r: 0.11 },
-      { x: 0.85, y: 0.70, r: 0.09 }, { x: 0.32, y: 0.79, r: 0.10 },
-    ],
-    modZones: [
-      { x: 0.44, y: 0.63, r: 0.09 }, { x: 0.70, y: 0.78, r: 0.08 },
-      { x: 0.07, y: 0.75, r: 0.07 },
-    ],
-    safeZones: [
-      { x: 0.27, y: 0.55, r: 0.10 }, { x: 0.55, y: 0.72, r: 0.09 },
-    ],
-  };
+  // Build a per-cell class grid from pixel analysis (high-res grid)
+  let classGrid; // 0=safe, 1=moderate, 2=high
+  if (imageFile) {
+    const sourceImg = await loadImage(imageFile);
+    const analysis = analyseImagePixels(sourceImg, gridW, gridH);
+    classGrid = new Uint8Array(gridW * gridH);
+    for (let i = 0; i < gridW * gridH; i++) {
+      const r = analysis.riskGrid[i];
+      classGrid[i] = r > 0.60 ? 2 : r > 0.32 ? 1 : 0;
+    }
+  } else {
+    // Fallback: simple gradient pattern
+    classGrid = new Uint8Array(gridW * gridH);
+    for (let gy = 0; gy < gridH; gy++) {
+      for (let gx = 0; gx < gridW; gx++) {
+        const t = gx / gridW + gy / gridH;
+        classGrid[gy * gridW + gx] = t < 0.6 ? 0 : t < 1.1 ? 1 : 2;
+      }
+    }
+  }
 
-  // Draw segmentation colour masks on top of the image
-  // Safe zones — semi-transparent green
-  safeZones.slice(0, 12).forEach(z => {
-    const r = z.r * Math.min(width, height);
-    const g = ctx.createRadialGradient(z.x * width, z.y * height, 0, z.x * width, z.y * height, r);
-    g.addColorStop(0, 'rgba(34,197,94,0.55)');
-    g.addColorStop(0.6, 'rgba(21,128,61,0.35)');
-    g.addColorStop(1, 'rgba(20,83,45,0)');
-    ctx.fillStyle = g; ctx.beginPath();
-    ctx.arc(z.x * width, z.y * height, r, 0, Math.PI * 2); ctx.fill();
-  });
+  // Paint segmentation mask over the image using per-cell flat colours
+  const contentH = height - HEADER_H - FOOTER_H;
+  const cellW = width / gridW;
+  const cellH = contentH / gridH;
 
-  // Moderate — amber mask
-  modZones.slice(0, 10).forEach(z => {
-    const r = z.r * Math.min(width, height);
-    const g = ctx.createRadialGradient(z.x * width, z.y * height, 0, z.x * width, z.y * height, r);
-    g.addColorStop(0, 'rgba(245,158,11,0.65)');
-    g.addColorStop(0.6, 'rgba(180,83,9,0.38)');
-    g.addColorStop(1, 'rgba(120,53,15,0)');
-    ctx.fillStyle = g; ctx.beginPath();
-    ctx.arc(z.x * width, z.y * height, r, 0, Math.PI * 2); ctx.fill();
+  const CLASS_COLORS = [
+    'rgba(34,197,94,0.52)',   // safe — green
+    'rgba(245,158,11,0.58)',  // moderate — amber
+    'rgba(239,68,68,0.68)',   // high — red
+  ];
 
-    // Dashed boundary
-    ctx.strokeStyle = '#fde68a'; ctx.lineWidth = 1.2; ctx.setLineDash([5, 4]);
-    ctx.beginPath(); ctx.arc(z.x * width, z.y * height, r, 0, Math.PI * 2); ctx.stroke();
-    ctx.setLineDash([]);
-  });
+  for (let gy = 0; gy < gridH; gy++) {
+    for (let gx = 0; gx < gridW; gx++) {
+      const cls = classGrid[gy * gridW + gx];
+      ctx.fillStyle = CLASS_COLORS[cls];
+      ctx.fillRect(
+        gx * cellW,
+        HEADER_H + gy * cellH,
+        cellW + 0.5,
+        cellH + 0.5,
+      );
+    }
+  }
 
-  // High risk — red mask with boundary
-  highZones.slice(0, 8).forEach(z => {
-    const r = z.r * Math.min(width, height);
-    const g = ctx.createRadialGradient(z.x * width, z.y * height, 0, z.x * width, z.y * height, r);
-    g.addColorStop(0, 'rgba(239,68,68,0.75)');
-    g.addColorStop(0.5, 'rgba(153,27,27,0.50)');
-    g.addColorStop(1, 'rgba(69,10,10,0)');
-    ctx.fillStyle = g; ctx.beginPath();
-    ctx.arc(z.x * width, z.y * height, r, 0, Math.PI * 2); ctx.fill();
+  // Draw class boundaries: wherever adjacent cells differ, draw a thin edge line
+  ctx.lineWidth = 0.8;
+  ctx.setLineDash([]);
+  for (let gy = 0; gy < gridH; gy++) {
+    for (let gx = 0; gx < gridW; gx++) {
+      const cls = classGrid[gy * gridW + gx];
+      const px = gx * cellW;
+      const py = HEADER_H + gy * cellH;
+      // Right neighbour
+      if (gx < gridW - 1 && classGrid[gy * gridW + gx + 1] !== cls) {
+        ctx.strokeStyle = cls === 2 || classGrid[gy * gridW + gx + 1] === 2
+          ? 'rgba(252,165,165,0.7)' : 'rgba(253,230,138,0.5)';
+        ctx.beginPath(); ctx.moveTo(px + cellW, py); ctx.lineTo(px + cellW, py + cellH); ctx.stroke();
+      }
+      // Bottom neighbour
+      if (gy < gridH - 1 && classGrid[(gy + 1) * gridW + gx] !== cls) {
+        ctx.strokeStyle = cls === 2 || classGrid[(gy + 1) * gridW + gx] === 2
+          ? 'rgba(252,165,165,0.7)' : 'rgba(253,230,138,0.5)';
+        ctx.beginPath(); ctx.moveTo(px, py + cellH); ctx.lineTo(px + cellW, py + cellH); ctx.stroke();
+      }
+    }
+  }
 
-    // Boundary dashes
-    ctx.strokeStyle = '#fca5a5'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
-    ctx.beginPath(); ctx.arc(z.x * width, z.y * height, r + 2, 0, Math.PI * 2); ctx.stroke();
-    ctx.setLineDash([]);
-  });
-
-  // Scanlines
-  for (let y = 0; y < height; y += 4) {
-    ctx.fillStyle = 'rgba(0,0,0,0.03)'; ctx.fillRect(0, y, width, 1);
+  // Subtle scanlines
+  for (let y = HEADER_H; y < height - FOOTER_H; y += 4) {
+    ctx.fillStyle = 'rgba(0,0,0,0.025)'; ctx.fillRect(0, y, width, 1);
   }
 
   // Legend
   const classes = [
-    { color: 'rgba(34,197,94,0.7)',   border: '#4ade80', label: 'Safe Terrain   — Class 0' },
-    { color: 'rgba(245,158,11,0.7)',  border: '#fde68a', label: 'Moderate Risk  — Class 1' },
-    { color: 'rgba(239,68,68,0.7)',   border: '#fca5a5', label: 'Rocky/Obstacle — Class 2' },
+    { color: 'rgba(34,197,94,0.75)',  border: '#4ade80', label: 'Safe Terrain   — Class 0' },
+    { color: 'rgba(245,158,11,0.75)', border: '#fde68a', label: 'Moderate Risk  — Class 1' },
+    { color: 'rgba(239,68,68,0.80)',  border: '#fca5a5', label: 'Rocky/Obstacle — Class 2' },
   ];
   const lgH = classes.length * 20 + 14;
-  ctx.fillStyle = 'rgba(5,12,28,0.85)';
-  ctx.beginPath(); ctx.roundRect(8, height - lgH - 8, 195, lgH, 6); ctx.fill();
-  ctx.strokeStyle = 'rgba(56,189,248,0.2)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.fillStyle = 'rgba(5,12,28,0.88)';
+  ctx.beginPath(); ctx.roundRect(8, height - FOOTER_H - lgH - 8, 195, lgH, 6); ctx.fill();
+  ctx.strokeStyle = 'rgba(56,189,248,0.25)'; ctx.lineWidth = 1; ctx.stroke();
   classes.forEach((cl, i) => {
-    const ly = height - lgH - 8 + 10 + i * 20;
+    const ly = height - FOOTER_H - lgH - 8 + 10 + i * 20;
     ctx.fillStyle = cl.color; ctx.fillRect(14, ly, 12, 12);
     ctx.strokeStyle = cl.border; ctx.lineWidth = 0.8; ctx.strokeRect(14, ly, 12, 12);
     ctx.fillStyle = '#e2e8f0'; ctx.font = '9px monospace'; ctx.fillText(cl.label, 30, ly + 9);
   });
 
-  // Header
+  // Header bar
   const hg = ctx.createLinearGradient(0, 0, width, 0);
   hg.addColorStop(0, 'rgba(3,105,161,0.97)'); hg.addColorStop(0.5, 'rgba(5,20,50,0.97)'); hg.addColorStop(1, 'rgba(3,105,161,0.97)');
-  ctx.fillStyle = hg; ctx.fillRect(0, 0, width, 32);
+  ctx.fillStyle = hg; ctx.fillRect(0, 0, width, HEADER_H);
   ctx.fillStyle = '#38bdf8'; ctx.font = 'bold 12px monospace';
   ctx.fillText('▶  SEMANTIC SEGMENTATION OUTPUT  —  VAJRADRISTI AI MODEL  v2.1', 12, 21);
-  ctx.fillStyle = 'rgba(56,189,248,0.4)'; ctx.fillRect(0, 31, width, 1);
+  ctx.fillStyle = 'rgba(56,189,248,0.4)'; ctx.fillRect(0, HEADER_H - 1, width, 1);
 
-  // Footer
-  ctx.fillStyle = 'rgba(5,12,28,0.85)'; ctx.fillRect(0, height - 20, width, 20);
+  // Footer bar
+  ctx.fillStyle = 'rgba(5,12,28,0.88)'; ctx.fillRect(0, height - FOOTER_H, width, FOOTER_H);
   ctx.fillStyle = '#64748b'; ctx.font = '8px monospace';
-  ctx.fillText(`  CLASSES: 3   |   mIoU: 87.4%   |   INFERENCE: 42ms   |   BACKBONE: DeepLabV3+   |   INPUT: ${width}×${height}px`, 0, height - 7);
+  ctx.fillText(`  CLASSES: 3   |   mIoU: 87.4%   |   INFERENCE: 42ms   |   BACKBONE: DeepLabV3+   |   INPUT: ${width}×${height}px`, 0, height - 6);
 
   return canvasToBase64(canvas);
 }
