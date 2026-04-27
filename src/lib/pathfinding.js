@@ -50,7 +50,7 @@ export function buildRiskGrid(imageData, gridW, gridH, imgW, imgH) {
   return grid;
 }
 
-// Build a uniform demo grid with risk blobs (used when no canvas imageData)
+// Build a uniform demo grid with risk blobs (fallback when no image)
 export function buildDemoGrid(gridW, gridH, riskBlobs = []) {
   const grid = [];
   for (let gy = 0; gy < gridH; gy++) {
@@ -77,6 +77,57 @@ export function buildDemoGrid(gridW, gridH, riskBlobs = []) {
     }
   }
   return grid;
+}
+
+/**
+ * Build a risk grid directly from the actual terrain image pixels.
+ * Uses the same intensity-threshold approach as the segmentation pipeline:
+ *   intensity = (R+G+B)/3
+ *   < 60   → obstacle (very dark rocks)
+ *   < 110  → high risk (vegetation/trees)
+ *   < 170  → moderate risk (navigable but rough)
+ *   ≥ 170  → safe (open ground / sky)
+ *
+ * Returns a promise that resolves to the grid.
+ */
+export function buildGridFromImage(imageSrc, gridW, gridH) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const tmp = document.createElement('canvas');
+      tmp.width  = gridW;
+      tmp.height = gridH;
+      const tc = tmp.getContext('2d');
+      tc.drawImage(img, 0, 0, gridW, gridH);
+      const { data } = tc.getImageData(0, 0, gridW, gridH);
+
+      const grid = [];
+      for (let gy = 0; gy < gridH; gy++) {
+        grid[gy] = [];
+        for (let gx = 0; gx < gridW; gx++) {
+          const i = (gy * gridW + gx) * 4;
+          const intensity = (data[i] + data[i + 1] + data[i + 2]) / 3;
+
+          let risk, type;
+          if (intensity < 60) {
+            risk = TERRAIN_CLASSES.obstacle.weight; type = 'obstacle';
+          } else if (intensity < 110) {
+            risk = TERRAIN_CLASSES.high.weight;     type = 'high';
+          } else if (intensity < 170) {
+            risk = TERRAIN_CLASSES.moderate.weight; type = 'moderate';
+          } else {
+            risk = TERRAIN_CLASSES.safe.weight;     type = 'safe';
+          }
+
+          grid[gy][gx] = { gx, gy, risk, type, f: 0, g: 0, h: 0, parent: null };
+        }
+      }
+      resolve(grid);
+    };
+    img.onerror = () => resolve(null);
+    img.src = imageSrc;
+  });
 }
 
 function heuristic(a, b) {

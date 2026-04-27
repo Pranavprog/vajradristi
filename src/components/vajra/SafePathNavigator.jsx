@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Navigation, RefreshCw, MapPin, Flag, Clock, Route, Shield, Zap, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { buildDemoGrid, astar, computePathMetrics, TERRAIN_CLASSES } from '@/lib/pathfinding';
+import { buildDemoGrid, buildGridFromImage, astar, computePathMetrics, TERRAIN_CLASSES } from '@/lib/pathfinding';
 import { useLang } from '@/lib/LanguageContext';
 
 const GRID_W = 60;
@@ -222,10 +222,21 @@ export default function SafePathNavigator({ terrainImageSrc }) {
   const [noPath,  setNoPath]    = useState(false);
   const [draggingBlob, setDraggingBlob] = useState(null);
 
-  // Init grid
+  // Rebuild grid from image whenever the terrain image changes
   useEffect(() => {
-    gridRef.current = buildDemoGrid(GRID_W, GRID_H, blobsRef.current);
-  }, []);
+    if (terrainImageSrc) {
+      buildGridFromImage(terrainImageSrc, GRID_W, GRID_H).then((grid) => {
+        if (grid) {
+          gridRef.current = grid;
+          runPathfinding(start, dest, grid);
+        }
+      });
+    } else {
+      gridRef.current = buildDemoGrid(GRID_W, GRID_H, blobsRef.current);
+      runPathfinding(start, dest, gridRef.current);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [terrainImageSrc]);
 
   // Run A*
   const runPathfinding = useCallback((s, d, grid) => {
@@ -256,11 +267,9 @@ export default function SafePathNavigator({ terrainImageSrc }) {
     setIsCalc(false);
   }, []);
 
-  // Run on mount and when start/dest change
+  // Re-run A* when start/dest changes (grid already built by image effect)
   useEffect(() => {
-    if (!gridRef.current) {
-      gridRef.current = buildDemoGrid(GRID_W, GRID_H, blobsRef.current);
-    }
+    if (!gridRef.current) return;
     runPathfinding(start, dest, gridRef.current);
     return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
   }, [start, dest, runPathfinding]);
