@@ -45,28 +45,96 @@ export default function Dashboard() {
     setSystemStatus('analyzing');
     setAlert(null);
 
+    // Generate demo results immediately in the background while trying the API
+    const demoPromise = Promise.all([
+      generateSegmentationDemo(selectedImage),
+      generateRiskHeatmapDemo(selectedImage),
+      getDemoMetrics(selectedImage),
+    ]).then(([segImg, riskImg, demoMetrics]) => ({
+      original_image: null,
+      segmentation_image: segImg,
+      risk_map_image: riskImg,
+      safe_path_image: generateSafePathDemo(),
+      ...demoMetrics,
+      alerts: demoMetrics.risk_percentages.high > 30 ? 'HIGH RISK DETECTED' : null,
+      explanation: demoMetrics.explanationLines,
+      _isDemo: true,
+      _demoMetrics: demoMetrics,
+    }));
+
+    // API call with a short timeout
     const formData = new FormData();
     formData.append('image', selectedImage);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-    try {
-      const response = await fetch(`${API_BASE_URL}/predict`, {
-        method: 'POST',
-        body: formData,
-      });
-
+    const apiPromise = fetch(`${API_BASE_URL}/predict`, {
+      method: 'POST',
+      body: formData,
+      signal: controller.signal,
+    }).then(async (response) => {
       if (!response.ok) throw new Error(`Server error: ${response.status}`);
-
       const data = await response.json();
-      setResult(data);
-      setSystemStatus('online');
+      return { ...data, _isDemo: false };
+    }).finally(() => clearTimeout(timeoutId));
 
-      if (data.alerts) {
-        setAlert(data.alerts);
-      }
+    // Race: whichever finishes first wins
+    try {
+      const result = await Promise.race([apiPromise, demoPromise]);
 
-      toast.success(t('analysisComplete'));
-      // Save to history
-      if (data) {
+      if (result._isDemo) {
+        // Demo won the race — API was too slow or failed
+        const { _isDemo, _demoMetrics, ...demoResult } = result;
+        setResult(demoResult);
+        setSystemStatus('online');
+        if (demoResult.alerts) setAlert(demoResult.alerts);
+        toast.info(t('demoAnalysis'));
+
+        base44.entities.AnalysisRecord.create({
+          image_name: selectedImage.name,
+          segmentation_image: demoResult.segmentation_image || null,
+          risk_map_image: demoResult.risk_map_image || null,
+          iou_score: _demoMetrics.iou_score,
+          inference_time: _demoMetrics.inference_time,
+          objects_detected: _demoMetrics.objects_detected,
+          terrain_difficulty: _demoMetrics.terrain_difficulty,
+          risk_high: _demoMetrics.risk_percentages?.high,
+          risk_moderate: _demoMetrics.risk_percentages?.moderate,
+          risk_safe: _demoMetrics.risk_percentages?.safe,
+          alert: demoResult.alerts || null,
+        }).catch(() => {});
+
+        // Still wait for API result silently in background
+        apiPromise.then((apiResult) => {
+          if (!apiResult._isDemo) {
+            const { _isDemo: _, ...data } = apiResult;
+            setResult(data);
+            setSystemStatus('online');
+            if (data.alerts) setAlert(data.alerts);
+            toast.success(t('analysisComplete'));
+            base44.entities.AnalysisRecord.create({
+              image_name: selectedImage.name,
+              segmentation_image: data.segmentation_image || null,
+              risk_map_image: data.risk_map_image || null,
+              iou_score: data.iou_score,
+              inference_time: data.inference_time,
+              objects_detected: data.objects_detected,
+              terrain_difficulty: data.terrain_difficulty,
+              risk_high: data.risk_percentages?.high,
+              risk_moderate: data.risk_percentages?.moderate,
+              risk_safe: data.risk_percentages?.safe,
+              alert: data.alerts || null,
+            }).catch(() => {});
+          }
+        }).catch(() => {});
+      } else {
+        // API won — real results
+        const { _isDemo: _, ...data } = result;
+        setResult(data);
+        setSystemStatus('online');
+        if (data.alerts) setAlert(data.alerts);
+        toast.success(t('analysisComplete'));
+
         base44.entities.AnalysisRecord.create({
           image_name: selectedImage.name,
           segmentation_image: data.segmentation_image || null,
@@ -81,40 +149,9 @@ export default function Dashboard() {
           alert: data.alerts || null,
         }).catch(() => {});
       }
-    } catch (error) {
+    } catch {
+      // Both failed somehow — should not happen since demo always succeeds
       setSystemStatus('online');
-      // Demo fallback — derive ALL outputs from the actual uploaded image pixels
-      const [segImg, riskImg, demoMetrics] = await Promise.all([
-        generateSegmentationDemo(selectedImage),
-        generateRiskHeatmapDemo(selectedImage),
-        getDemoMetrics(selectedImage),
-      ]);
-      const demoResult = {
-        original_image: null,
-        segmentation_image: segImg,
-        risk_map_image: riskImg,
-        safe_path_image: generateSafePathDemo(),
-        ...demoMetrics,
-        alerts: demoMetrics.risk_percentages.high > 30 ? 'HIGH RISK DETECTED' : null,
-        explanation: demoMetrics.explanationLines,
-      };
-      setResult(demoResult);
-      if (demoResult.alerts) setAlert(demoResult.alerts);
-      toast.info(t('demoAnalysis'));
-      // Save demo result to history
-      base44.entities.AnalysisRecord.create({
-        image_name: selectedImage.name,
-        segmentation_image: demoResult.segmentation_image || null,
-        risk_map_image: demoResult.risk_map_image || null,
-        iou_score: demoMetrics.iou_score,
-        inference_time: demoMetrics.inference_time,
-        objects_detected: demoMetrics.objects_detected,
-        terrain_difficulty: demoMetrics.terrain_difficulty,
-        risk_high: demoMetrics.risk_percentages?.high,
-        risk_moderate: demoMetrics.risk_percentages?.moderate,
-        risk_safe: demoMetrics.risk_percentages?.safe,
-        alert: demoResult.alerts || null,
-      }).catch(() => {});
     } finally {
       setIsLoading(false);
     }
